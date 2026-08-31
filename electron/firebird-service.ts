@@ -160,6 +160,22 @@ export class FirebirdService {
     return val;
   }
 
+  public cleanSqlForExecution(sql: string): string {
+    let s = sql.trim();
+
+    // Remove any SET TERM statements anywhere in the text (case-insensitive)
+    s = s.replace(/SET\s+TERM\s+[\^~#@!;&|]+(?:\s*;\s*|\s*[\^~#@!;&|]+\s*|\s*)/gi, '');
+    s = s.replace(/SET\s+TERM\s+;\s*[\^~#@!;&|]*/gi, '');
+
+    // Trim whitespace
+    s = s.trim();
+
+    // Remove trailing delimiter symbols like ^, ~, #, or whitespace at the end
+    s = s.replace(/[\s\^~#@!]+$/g, '');
+
+    return s.trim();
+  }
+
   public async executeQuery(sql: string, maxRows: number = 1000): Promise<{
     columns: string[];
     rows: Record<string, any>[];
@@ -173,18 +189,16 @@ export class FirebirdService {
       throw new Error('No hay conexión activa a la base de datos Firebird.');
     }
 
-    let trimmedSql = sql.trim();
-    
-    // Remove client-specific SET TERM statements if present
-    trimmedSql = trimmedSql.replace(/^SET\s+TERM\s+[^;]+;\s*/i, '');
-    trimmedSql = trimmedSql.replace(/\s*SET\s+TERM\s+;\s*\^?$/i, '');
-    trimmedSql = trimmedSql.trim();
+    const cleanedSql = this.cleanSqlForExecution(sql);
+    if (!cleanedSql) {
+      throw new Error('La consulta está vacía.');
+    }
 
-    const isSelect = /^(SELECT|WITH|SHOW|LIST)/i.test(trimmedSql);
+    const isSelect = /^(SELECT|WITH|SHOW|LIST)/i.test(cleanedSql);
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
-      this.activeDb!.query(trimmedSql, [], (err, rawResult) => {
+      this.activeDb!.query(cleanedSql, [], (err, rawResult) => {
         const executionTimeMs = Date.now() - startTime;
         if (err) {
           return reject(err);
@@ -198,7 +212,7 @@ export class FirebirdService {
             rowCount: 1,
             affectedRows: affected,
             executionTimeMs,
-            sql: trimmedSql
+            sql: cleanedSql
           });
         }
 
@@ -224,7 +238,7 @@ export class FirebirdService {
           rows: formattedRows,
           rowCount: formattedRows.length,
           executionTimeMs,
-          sql: trimmedSql,
+          sql: cleanedSql,
           hasMore
         });
       });
@@ -474,7 +488,7 @@ export class FirebirdService {
           return `    ${p.PARAM_NAME} ${typeStr}`;
         });
 
-      let ddl = `SET TERM ^ ;\n\nCREATE OR ALTER PROCEDURE ${cleanName}`;
+      let ddl = `CREATE OR ALTER PROCEDURE ${cleanName}`;
       if (inParams.length > 0) {
         ddl += ` (\n${inParams.join(',\n')}\n)`;
       }
@@ -492,7 +506,7 @@ export class FirebirdService {
         ddl += `BEGIN\n  ${body}\nEND`;
       }
       
-      ddl += `\n^\n\nSET TERM ; ^\n`;
+      ddl += `\n`;
 
       return { ddl, name: cleanName, type: 'PROCEDURE' };
     }
@@ -520,9 +534,9 @@ export class FirebirdService {
       const status = Number(trig.INACTIVE) === 1 ? 'INACTIVE' : 'ACTIVE';
       const eventType = this.decodeTriggerType(Number(trig.TRIG_TYPE) || 1);
 
-      let ddl = `SET TERM ^ ;\n\nCREATE OR ALTER TRIGGER ${cleanName} FOR ${trig.TABLE_NAME}\n`;
+      let ddl = `CREATE OR ALTER TRIGGER ${cleanName} FOR ${trig.TABLE_NAME}\n`;
       ddl += `${status} ${eventType} POSITION ${trig.SEQ}\nAS\n`;
-      ddl += `${source.trim()}\n^\n\nSET TERM ; ^\n`;
+      ddl += `${source.trim()}\n`;
 
       return { ddl, name: cleanName, type: 'TRIGGER' };
     }
