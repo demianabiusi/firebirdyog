@@ -138,6 +138,15 @@ ipcMain.handle('fb:get-table-details', async (_, tableName: string) => {
   }
 });
 
+ipcMain.handle('fb:get-object-ddl', async (_, type: string, name: string) => {
+  try {
+    const data = await firebirdService.getObjectDdl(type, name);
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al obtener DDL del objeto' };
+  }
+});
+
 // IPC: Queries
 ipcMain.handle('fb:execute-query', async (_, sql: string, maxRows?: number) => {
   try {

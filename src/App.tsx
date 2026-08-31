@@ -271,6 +271,34 @@ export const App: React.FC = () => {
     }
   };
 
+  // When requesting to edit a Procedure, Trigger, View, or Table
+  const handleEditObject = async (type: 'PROCEDURE' | 'TRIGGER' | 'VIEW' | 'TABLE', name: string) => {
+    if (!isConnected) return;
+    try {
+      if (window.electronAPI?.getObjectDdl) {
+        const res = await window.electronAPI.getObjectDdl(type, name);
+        if (res.success && res.data) {
+          const newTabId = 'tab_edit_' + name + '_' + Date.now();
+          const newTab: QueryTab = {
+            id: newTabId,
+            title: `Editar: ${name}`,
+            sql: res.data.ddl,
+            result: null,
+            isRunning: false,
+            error: null,
+            activeResultTab: 'grid'
+          };
+          setTabs(prev => [...prev, newTab]);
+          setActiveTabId(newTabId);
+        } else {
+          alert('No se pudo obtener el código de ' + name + ': ' + (res.error || 'Error desconocido'));
+        }
+      }
+    } catch (err: any) {
+      alert('Error al cargar código del objeto: ' + err.message);
+    }
+  };
+
   // Keyboard shortcut listener for F9 and Ctrl+N
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -310,6 +338,7 @@ export const App: React.FC = () => {
               onRefresh={refreshSchema}
               onSelectObjectSql={handleSelectObjectSql}
               onShowTableDetails={(tbl) => setSelectedTableForDetails(tbl)}
+              onEditObject={handleEditObject}
               databaseName={activeConfig?.database}
             />
           ) : (

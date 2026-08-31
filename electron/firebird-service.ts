@@ -1,4 +1,10 @@
-import Firebird from 'node-firebird';
+import * as FirebirdRaw from 'node-firebird';
+import type FirebirdType from 'node-firebird';
+
+// Resolve CommonJS / ESM interop for node-firebird
+const Firebird: typeof FirebirdType = ((FirebirdRaw as any).attach 
+  ? FirebirdRaw 
+  : ((FirebirdRaw as any).default || FirebirdRaw)) as any;
 
 export interface FirebirdConnectionOptions {
   host: string;
@@ -12,7 +18,7 @@ export interface FirebirdConnectionOptions {
 }
 
 export class FirebirdService {
-  private activeDb: Firebird.Database | null = null;
+  private activeDb: FirebirdType.Database | null = null;
   private currentConfig: any = null;
 
   public isConnected(): boolean {
@@ -26,7 +32,7 @@ export class FirebirdService {
   public async testConnection(options: FirebirdConnectionOptions): Promise<{ success: boolean; message: string; pingMs: number }> {
     const start = Date.now();
     return new Promise((resolve) => {
-      const fbOptions: Firebird.Options = {
+      const fbOptions: FirebirdType.Options = {
         host: options.host || '127.0.0.1',
         port: Number(options.port) || 3050,
         database: options.database,
@@ -67,7 +73,7 @@ export class FirebirdService {
       await this.disconnect();
     }
 
-    const fbOptions: Firebird.Options = {
+    const fbOptions: FirebirdType.Options = {
       host: options.host || '127.0.0.1',
       port: Number(options.port) || 3050,
       database: options.database,
@@ -105,15 +111,35 @@ export class FirebirdService {
     });
   }
 
+  public async readBlobValue(val: any): Promise<string> {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (Buffer.isBuffer(val)) return val.toString('utf-8');
+    if (typeof val === 'function') {
+      return new Promise((resolve) => {
+        try {
+          val((err: any, _name: any, emitter: any) => {
+            if (err || !emitter) return resolve('');
+            const chunks: Buffer[] = [];
+            emitter.on('data', (chunk: Buffer) => chunks.push(chunk));
+            emitter.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+            emitter.on('error', () => resolve(''));
+          });
+        } catch {
+          resolve('');
+        }
+      });
+    }
+    return String(val);
+  }
+
   private formatRowValue(val: any): any {
     if (val === null || val === undefined) {
       return null;
     }
     if (Buffer.isBuffer(val)) {
-      // Check if it's text or binary
       try {
         const str = val.toString('utf-8');
-        // Check if string contains printable chars
         if (/^[\x20-\x7E\s\u00A0-\uFFFF]*$/.test(str.substring(0, 100))) {
           return str;
         }
@@ -123,7 +149,6 @@ export class FirebirdService {
       }
     }
     if (typeof val === 'function') {
-      // Firebird BLOB callback function in node-firebird
       return '[BLOB]';
     }
     if (val instanceof Date) {
@@ -148,7 +173,13 @@ export class FirebirdService {
       throw new Error('No hay conexión activa a la base de datos Firebird.');
     }
 
-    const trimmedSql = sql.trim();
+    let trimmedSql = sql.trim();
+    
+    // Remove client-specific SET TERM statements if present
+    trimmedSql = trimmedSql.replace(/^SET\s+TERM\s+[^;]+;\s*/i, '');
+    trimmedSql = trimmedSql.replace(/\s*SET\s+TERM\s+;\s*\^?$/i, '');
+    trimmedSql = trimmedSql.trim();
+
     const isSelect = /^(SELECT|WITH|SHOW|LIST)/i.test(trimmedSql);
     const startTime = Date.now();
 
@@ -160,7 +191,6 @@ export class FirebirdService {
         }
 
         if (!isSelect || !Array.isArray(rawResult)) {
-          // DML / DDL / Non-select query
           const affected = typeof rawResult === 'number' ? rawResult : 0;
           return resolve({
             columns: ['RESULT'],
@@ -176,13 +206,11 @@ export class FirebirdService {
         const hasMore = rows.length > maxRows;
         const slicedRows = hasMore ? rows.slice(0, maxRows) : rows;
 
-        // Extract column names
         const columnsSet = new Set<string>();
         if (slicedRows.length > 0) {
           Object.keys(slicedRows[0]).forEach((k) => columnsSet.add(k));
         }
 
-        // Format rows
         const formattedRows = slicedRows.map((row) => {
           const newRow: Record<string, any> = {};
           for (const key of Object.keys(row)) {
@@ -216,7 +244,6 @@ export class FirebirdService {
       throw new Error('No hay conexión activa a la base de datos.');
     }
 
-    // Tables
     const tablesQuery = `
       SELECT TRIM(RDB$RELATION_NAME) AS NAME
       FROM RDB$RELATIONS
@@ -225,7 +252,6 @@ export class FirebirdService {
       ORDER BY 1
     `;
 
-    // Views
     const viewsQuery = `
       SELECT TRIM(RDB$RELATION_NAME) AS NAME
       FROM RDB$RELATIONS
@@ -234,7 +260,6 @@ export class FirebirdService {
       ORDER BY 1
     `;
 
-    // Procedures
     const proceduresQuery = `
       SELECT 
         TRIM(RDB$PROCEDURE_NAME) AS NAME,
@@ -245,7 +270,6 @@ export class FirebirdService {
       ORDER BY 1
     `;
 
-    // Triggers
     const triggersQuery = `
       SELECT 
         TRIM(RDB$TRIGGER_NAME) AS NAME,
@@ -256,7 +280,6 @@ export class FirebirdService {
       ORDER BY 1
     `;
 
-    // Generators
     const generatorsQuery = `
       SELECT TRIM(RDB$GENERATOR_NAME) AS NAME
       FROM RDB$GENERATORS
@@ -264,7 +287,6 @@ export class FirebirdService {
       ORDER BY 1
     `;
 
-    // Domains
     const domainsQuery = `
       SELECT TRIM(RDB$FIELD_NAME) AS NAME
       FROM RDB$FIELDS
@@ -273,7 +295,6 @@ export class FirebirdService {
       ORDER BY 1
     `;
 
-    // Exceptions
     const exceptionsQuery = `
       SELECT TRIM(RDB$EXCEPTION_NAME) AS NAME
       FROM RDB$EXCEPTIONS
@@ -325,30 +346,30 @@ export class FirebirdService {
 
   private resolveFieldType(typeCode: number, subType: number, length: number, precision: number, scale: number): string {
     switch (typeCode) {
-      case 7: // SMALLINT
+      case 7:
         if (scale < 0) return `NUMERIC(4, ${Math.abs(scale)})`;
         return 'SMALLINT';
-      case 8: // INTEGER
+      case 8:
         if (scale < 0) return `NUMERIC(9, ${Math.abs(scale)})`;
         return 'INTEGER';
-      case 10: // FLOAT
+      case 10:
         return 'FLOAT';
-      case 12: // DATE
+      case 12:
         return 'DATE';
-      case 13: // TIME
+      case 13:
         return 'TIME';
-      case 14: // CHAR
+      case 14:
         return `CHAR(${length})`;
-      case 16: // BIGINT / INT64
+      case 16:
         if (scale < 0) return `NUMERIC(${precision || 18}, ${Math.abs(scale)})`;
         return 'BIGINT';
-      case 27: // DOUBLE PRECISION
+      case 27:
         return 'DOUBLE PRECISION';
-      case 35: // TIMESTAMP
+      case 35:
         return 'TIMESTAMP';
-      case 37: // VARCHAR
+      case 37:
         return `VARCHAR(${length})`;
-      case 261: // BLOB
+      case 261:
         return subType === 1 ? 'BLOB SUB_TYPE TEXT' : 'BLOB SUB_TYPE BINARY';
       case 23:
       case 17:
@@ -356,6 +377,183 @@ export class FirebirdService {
       default:
         return `TYPE_${typeCode}`;
     }
+  }
+
+  private decodeTriggerType(typeNum: number): string {
+    const isBefore = (typeNum % 2) === 1;
+    const actionNum = Math.floor((typeNum + 1) / 2);
+    let timing = isBefore ? 'BEFORE' : 'AFTER';
+    let event = 'INSERT';
+    if (actionNum === 1) event = 'INSERT';
+    else if (actionNum === 2) event = 'UPDATE';
+    else if (actionNum === 3) event = 'DELETE';
+    return `${timing} ${event}`;
+  }
+
+  public async getObjectDdl(objectType: string, objectName: string): Promise<{ ddl: string; name: string; type: string }> {
+    if (!this.activeDb) {
+      throw new Error('No hay conexión activa a la base de datos.');
+    }
+
+    const cleanName = objectName.trim().toUpperCase();
+    const typeUpper = objectType.trim().toUpperCase();
+
+    const queryParamsAsync = (sql: string, params: any[]): Promise<any[]> => {
+      return new Promise((res, rej) => {
+        this.activeDb!.query(sql, params, (err, rows) => {
+          if (err) return rej(err);
+          res(Array.isArray(rows) ? rows : []);
+        });
+      });
+    };
+
+    if (typeUpper === 'PROCEDURE') {
+      // 1. Fetch Procedure Source & Header
+      const procQuery = `
+        SELECT 
+          TRIM(P.RDB$PROCEDURE_NAME) AS NAME,
+          P.RDB$PROCEDURE_SOURCE AS SOURCE,
+          COALESCE(P.RDB$PROCEDURE_INPUTS, 0) AS INPUTS,
+          COALESCE(P.RDB$PROCEDURE_OUTPUTS, 0) AS OUTPUTS
+        FROM RDB$PROCEDURES P
+        WHERE TRIM(P.RDB$PROCEDURE_NAME) = ?
+      `;
+
+      // 2. Fetch Parameters
+      const paramQuery = `
+        SELECT 
+          TRIM(PP.RDB$PARAMETER_NAME) AS PARAM_NAME,
+          PP.RDB$PARAMETER_TYPE AS PARAM_TYPE,
+          PP.RDB$PARAMETER_NUMBER AS PARAM_NUM,
+          F.RDB$FIELD_TYPE AS FIELD_TYPE_CODE,
+          F.RDB$FIELD_SUB_TYPE AS FIELD_SUB_TYPE,
+          F.RDB$FIELD_LENGTH AS FIELD_LENGTH,
+          F.RDB$FIELD_PRECISION AS FIELD_PRECISION,
+          F.RDB$FIELD_SCALE AS FIELD_SCALE
+        FROM RDB$PROCEDURE_PARAMETERS PP
+        JOIN RDB$FIELDS F ON PP.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+        WHERE TRIM(PP.RDB$PROCEDURE_NAME) = ?
+        ORDER BY PP.RDB$PARAMETER_TYPE, PP.RDB$PARAMETER_NUMBER
+      `;
+
+      const [procRows, paramRows] = await Promise.all([
+        queryParamsAsync(procQuery, [cleanName]),
+        queryParamsAsync(paramQuery, [cleanName])
+      ]);
+
+      if (procRows.length === 0) {
+        throw new Error(`No se encontró el procedimiento '${cleanName}'.`);
+      }
+
+      const proc = procRows[0];
+      const source = await this.readBlobValue(proc.SOURCE);
+
+      const inParams = paramRows
+        .filter(p => Number(p.PARAM_TYPE) === 0)
+        .map(p => {
+          const typeStr = this.resolveFieldType(
+            Number(p.FIELD_TYPE_CODE),
+            Number(p.FIELD_SUB_TYPE),
+            Number(p.FIELD_LENGTH),
+            Number(p.FIELD_PRECISION),
+            Number(p.FIELD_SCALE)
+          );
+          return `    ${p.PARAM_NAME} ${typeStr}`;
+        });
+
+      const outParams = paramRows
+        .filter(p => Number(p.PARAM_TYPE) === 1)
+        .map(p => {
+          const typeStr = this.resolveFieldType(
+            Number(p.FIELD_TYPE_CODE),
+            Number(p.FIELD_SUB_TYPE),
+            Number(p.FIELD_LENGTH),
+            Number(p.FIELD_PRECISION),
+            Number(p.FIELD_SCALE)
+          );
+          return `    ${p.PARAM_NAME} ${typeStr}`;
+        });
+
+      let ddl = `SET TERM ^ ;\n\nCREATE OR ALTER PROCEDURE ${cleanName}`;
+      if (inParams.length > 0) {
+        ddl += ` (\n${inParams.join(',\n')}\n)`;
+      }
+      if (outParams.length > 0) {
+        ddl += `\nRETURNS (\n${outParams.join(',\n')}\n)`;
+      }
+      ddl += `\nAS\n`;
+      
+      const body = source.trim();
+      if (body.toUpperCase().startsWith('BEGIN')) {
+        ddl += body;
+      } else if (body.toUpperCase().startsWith('DECLARE') || body.toUpperCase().startsWith('VARIABLE')) {
+        ddl += body;
+      } else {
+        ddl += `BEGIN\n  ${body}\nEND`;
+      }
+      
+      ddl += `\n^\n\nSET TERM ; ^\n`;
+
+      return { ddl, name: cleanName, type: 'PROCEDURE' };
+    }
+
+    if (typeUpper === 'TRIGGER') {
+      const triggerQuery = `
+        SELECT 
+          TRIM(T.RDB$TRIGGER_NAME) AS NAME,
+          TRIM(T.RDB$RELATION_NAME) AS TABLE_NAME,
+          COALESCE(T.RDB$TRIGGER_SEQUENCE, 0) AS SEQ,
+          T.RDB$TRIGGER_TYPE AS TRIG_TYPE,
+          COALESCE(T.RDB$TRIGGER_INACTIVE, 0) AS INACTIVE,
+          T.RDB$TRIGGER_SOURCE AS SOURCE
+        FROM RDB$TRIGGERS T
+        WHERE TRIM(T.RDB$TRIGGER_NAME) = ?
+      `;
+
+      const rows = await queryParamsAsync(triggerQuery, [cleanName]);
+      if (rows.length === 0) {
+        throw new Error(`No se encontró el trigger '${cleanName}'.`);
+      }
+
+      const trig = rows[0];
+      const source = await this.readBlobValue(trig.SOURCE);
+      const status = Number(trig.INACTIVE) === 1 ? 'INACTIVE' : 'ACTIVE';
+      const eventType = this.decodeTriggerType(Number(trig.TRIG_TYPE) || 1);
+
+      let ddl = `SET TERM ^ ;\n\nCREATE OR ALTER TRIGGER ${cleanName} FOR ${trig.TABLE_NAME}\n`;
+      ddl += `${status} ${eventType} POSITION ${trig.SEQ}\nAS\n`;
+      ddl += `${source.trim()}\n^\n\nSET TERM ; ^\n`;
+
+      return { ddl, name: cleanName, type: 'TRIGGER' };
+    }
+
+    if (typeUpper === 'VIEW') {
+      const viewQuery = `
+        SELECT 
+          TRIM(R.RDB$RELATION_NAME) AS NAME,
+          R.RDB$VIEW_SOURCE AS SOURCE
+        FROM RDB$RELATIONS R
+        WHERE TRIM(R.RDB$RELATION_NAME) = ?
+      `;
+
+      const rows = await queryParamsAsync(viewQuery, [cleanName]);
+      if (rows.length === 0) {
+        throw new Error(`No se encontró la vista '${cleanName}'.`);
+      }
+
+      const view = rows[0];
+      const source = await this.readBlobValue(view.SOURCE);
+
+      let ddl = `CREATE OR ALTER VIEW ${cleanName} AS\n${source.trim()};\n`;
+      return { ddl, name: cleanName, type: 'VIEW' };
+    }
+
+    if (typeUpper === 'TABLE') {
+      const details = await this.getTableDetails(cleanName);
+      return { ddl: details.ddl || '', name: cleanName, type: 'TABLE' };
+    }
+
+    throw new Error(`Tipo de objeto '${objectType}' no soportado para generación de DDL.`);
   }
 
   public async getTableDetails(tableName: string): Promise<any> {
@@ -379,9 +577,9 @@ export class FirebirdService {
           WHEN EXISTS (
             SELECT 1 FROM RDB$RELATION_CONSTRAINTS RC
             JOIN RDB$INDEX_SEGMENTS ISG ON ISG.RDB$INDEX_NAME = RC.RDB$INDEX_NAME
-            WHERE TRIM(RC.RDB$RELATION_NAME) = ?
+            WHERE RC.RDB$RELATION_NAME = RF.RDB$RELATION_NAME
               AND RC.RDB$CONSTRAINT_TYPE = 'PRIMARY KEY'
-              AND TRIM(ISG.RDB$FIELD_NAME) = TRIM(RF.RDB$FIELD_NAME)
+              AND ISG.RDB$FIELD_NAME = RF.RDB$FIELD_NAME
           ) THEN 1 ELSE 0 END AS IS_PRIMARY_KEY
       FROM RDB$RELATION_FIELDS RF
       JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
@@ -424,7 +622,7 @@ export class FirebirdService {
     const cleanTableName = tableName.trim().toUpperCase();
 
     const [colRows, trigRows, idxRows] = await Promise.all([
-      queryParamsAsync(columnsQuery, [cleanTableName, cleanTableName]),
+      queryParamsAsync(columnsQuery, [cleanTableName]),
       queryParamsAsync(triggersQuery, [cleanTableName]),
       queryParamsAsync(indicesQuery, [cleanTableName])
     ]);
@@ -454,7 +652,6 @@ export class FirebirdService {
       inactive: Number(t.INACTIVE) === 1
     }));
 
-    // Group indices by name
     const indicesMap = new Map<string, { name: string; unique: boolean; fields: string[] }>();
     for (const row of idxRows) {
       if (!indicesMap.has(row.INDEX_NAME)) {
@@ -467,7 +664,6 @@ export class FirebirdService {
       indicesMap.get(row.INDEX_NAME)!.fields.push(row.FIELD_NAME);
     }
 
-    // Generate basic DDL for table
     let ddl = `CREATE TABLE ${cleanTableName} (\n`;
     const colDefs = columns.map((col) => {
       let def = `    ${col.columnName} ${col.fieldType}`;

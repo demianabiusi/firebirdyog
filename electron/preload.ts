@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   getSchemaObjects: () => ipcRenderer.invoke('fb:get-schema-objects'),
   getTableDetails: (tableName: string) => ipcRenderer.invoke('fb:get-table-details', tableName),
+  getObjectDdl: (type: string, name: string) => ipcRenderer.invoke('fb:get-object-ddl', type, name),
   
   executeQuery: (sql: string, maxRows?: number) => ipcRenderer.invoke('fb:execute-query', sql, maxRows),
   executeScript: (script: string) => ipcRenderer.invoke('fb:execute-script', script),

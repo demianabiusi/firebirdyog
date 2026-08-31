@@ -108,6 +108,7 @@ export interface ElectronAPI {
     exceptions: string[];
   }>>;
   getTableDetails: (tableName: string) => Promise<IpcResponse<TableDetails>>;
+  getObjectDdl: (type: string, name: string) => Promise<IpcResponse<{ ddl: string; name: string; type: string }>>;
   
   // Query execution
   executeQuery: (sql: string, maxRows?: number) => Promise<IpcResponse<QueryResult>>;

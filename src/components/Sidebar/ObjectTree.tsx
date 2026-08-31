@@ -33,6 +33,7 @@ interface ObjectTreeProps {
   onRefresh: () => void;
   onSelectObjectSql: (sql: string, executeImmediately?: boolean) => void;
   onShowTableDetails: (tableName: string) => void;
+  onEditObject: (type: 'PROCEDURE' | 'TRIGGER' | 'VIEW' | 'TABLE', name: string) => void;
   databaseName?: string;
 }
 
@@ -42,6 +43,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
   onRefresh,
   onSelectObjectSql,
   onShowTableDetails,
+  onEditObject,
   databaseName
 }) => {
   const [searchFilter, setSearchFilter] = useState('');
@@ -246,12 +248,38 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredViews.map((view) => (
                   <div
                     key={view}
-                    onClick={() => onSelectObjectSql(`SELECT * FROM ${view} ROWS 100;`, true)}
-                    className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-teal-300 transition-colors"
+                    className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-teal-300 transition-colors"
                   >
-                    <div className="flex items-center gap-2 min-w-0 truncate">
+                    <div
+                      className="flex items-center gap-2 min-w-0 flex-1 truncate"
+                      onClick={() => onSelectObjectSql(`SELECT * FROM ${view} ROWS 100;`, true)}
+                      title={`Clic para consultar: SELECT * FROM ${view} ROWS 100;`}
+                    >
                       <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
                       <span className="truncate font-mono text-[11.5px]">{view}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditObject('VIEW', view);
+                        }}
+                        title="Editar / Ver DDL de la Vista"
+                        className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-teal-300 rounded"
+                      >
+                        <Code className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectObjectSql(`SELECT * FROM ${view} ROWS 100;`, true);
+                        }}
+                        title="Ejecutar SELECT"
+                        className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
+                      >
+                        <Play className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -288,22 +316,56 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredProcedures.map((proc) => (
                   <div
                     key={proc.name}
-                    onClick={() => {
-                      if (proc.outputs > 0) {
-                        onSelectObjectSql(`SELECT * FROM ${proc.name};`, false);
-                      } else {
-                        onSelectObjectSql(`EXECUTE PROCEDURE ${proc.name};`, false);
-                      }
-                    }}
-                    className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-amber-300 transition-colors"
+                    className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-amber-300 transition-colors"
                   >
-                    <div className="flex items-center gap-2 min-w-0 truncate">
+                    <div
+                      className="flex items-center gap-2 min-w-0 flex-1 truncate"
+                      onClick={() => {
+                        if (proc.outputs > 0) {
+                          onSelectObjectSql(`SELECT * FROM ${proc.name};`, false);
+                        } else {
+                          onSelectObjectSql(`EXECUTE PROCEDURE ${proc.name};`, false);
+                        }
+                      }}
+                      onDoubleClick={() => onEditObject('PROCEDURE', proc.name)}
+                      title={`Clic: consultar plantilla | Doble clic: editar código`}
+                    >
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                       <span className="truncate font-mono text-[11.5px]">{proc.name}</span>
                     </div>
-                    <span className="text-[9px] text-zinc-500">
-                      in:{proc.inputs} out:{proc.outputs}
-                    </span>
+
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-zinc-500 mr-1 group-hover:hidden">
+                        in:{proc.inputs} out:{proc.outputs}
+                      </span>
+                      
+                      <div className="hidden group-hover:flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditObject('PROCEDURE', proc.name);
+                          }}
+                          title="Editar / Ver Código (DDL)"
+                          className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-300 rounded"
+                        >
+                          <Code className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (proc.outputs > 0) {
+                              onSelectObjectSql(`SELECT * FROM ${proc.name};`, true);
+                            } else {
+                              onSelectObjectSql(`EXECUTE PROCEDURE ${proc.name};`, true);
+                            }
+                          }}
+                          title="Ejecutar"
+                          className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
+                        >
+                          <Play className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))
               )}
@@ -339,17 +401,34 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredTriggers.map((trig) => (
                   <div
                     key={trig.name}
-                    className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-yellow-300 transition-colors"
+                    className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-yellow-300 transition-colors"
                   >
-                    <div className="flex items-center gap-2 min-w-0 truncate">
+                    <div
+                      className="flex items-center gap-2 min-w-0 flex-1 truncate"
+                      onClick={() => onEditObject('TRIGGER', trig.name)}
+                      title={`Clic para editar trigger ${trig.name}`}
+                    >
                       <span className={`w-1.5 h-1.5 rounded-full ${trig.inactive ? 'bg-zinc-600' : 'bg-yellow-500'} shrink-0`} />
                       <span className="truncate font-mono text-[11.5px]">{trig.name}</span>
                     </div>
-                    {trig.table && (
-                      <span className="text-[9px] text-zinc-500 font-mono truncate max-w-[80px]">
-                        {trig.table}
-                      </span>
-                    )}
+
+                    <div className="flex items-center gap-1">
+                      {trig.table && (
+                        <span className="text-[9px] text-zinc-500 font-mono truncate max-w-[80px] group-hover:hidden">
+                          {trig.table}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditObject('TRIGGER', trig.name);
+                        }}
+                        title="Editar / Ver Código (DDL)"
+                        className="hidden group-hover:block p-1 hover:bg-zinc-700 text-zinc-400 hover:text-yellow-300 rounded"
+                      >
+                        <Code className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
