@@ -103,6 +103,15 @@ ipcMain.handle('fb:connect', async (_, config) => {
   }
 });
 
+ipcMain.handle('fb:create-database', async (_, config) => {
+  try {
+    const res = await firebirdService.createDatabase(config);
+    return { success: true, data: res };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al crear la base de datos' };
+  }
+});
+
 ipcMain.handle('fb:disconnect', async () => {
   try {
     await firebirdService.disconnect();
@@ -189,6 +198,20 @@ ipcMain.handle('dialog:select-database-file', async () => {
   });
   if (canceled || filePaths.length === 0) return null;
   return filePaths[0];
+});
+
+ipcMain.handle('dialog:select-new-database-file', async (_, defaultFilename?: string) => {
+  if (!mainWindow) return null;
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Ubicación para la nueva base de datos Firebird (.fdb)',
+    defaultPath: defaultFilename || 'nueva_base.fdb',
+    filters: [
+      { name: 'Firebird Database', extensions: ['fdb'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  if (canceled || !filePath) return null;
+  return filePath;
 });
 
 ipcMain.handle('dialog:save-sql-file', async (_, content: string, defaultPath?: string) => {

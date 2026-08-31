@@ -97,6 +97,36 @@ export class FirebirdService {
     });
   }
 
+  public async createDatabase(options: FirebirdConnectionOptions): Promise<{ database: string }> {
+    if (this.activeDb) {
+      await this.disconnect();
+    }
+
+    const fbOptions: FirebirdType.Options = {
+      host: options.host || '127.0.0.1',
+      port: Number(options.port) || 3050,
+      database: options.database,
+      user: options.user || 'SYSDBA',
+      password: options.password || 'masterkey',
+      role: options.role || undefined,
+      pageSize: options.pageSize || 16384,
+      encoding: (options.charset || 'UTF8') as any,
+      blobAsText: true,
+      lowercase_keys: false
+    };
+
+    return new Promise((resolve, reject) => {
+      Firebird.create(fbOptions, (err, db) => {
+        if (err) {
+          return reject(err);
+        }
+        this.activeDb = db;
+        this.currentConfig = options;
+        resolve({ database: options.database });
+      });
+    });
+  }
+
   public async disconnect(): Promise<void> {
     if (!this.activeDb) return;
     return new Promise((resolve) => {

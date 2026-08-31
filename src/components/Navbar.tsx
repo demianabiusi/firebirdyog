@@ -15,6 +15,7 @@ interface NavbarProps {
   isConnected: boolean;
   activeConfig: ConnectionConfig | null;
   onOpenConnectionModal: () => void;
+  onOpenCreateDbModal: () => void;
   onDisconnect: () => void;
   onNewQuery: () => void;
 }
@@ -23,6 +24,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isConnected,
   activeConfig,
   onOpenConnectionModal,
+  onOpenCreateDbModal,
   onDisconnect,
   onNewQuery
 }) => {
@@ -74,6 +76,15 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Right Connection Controls */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={onOpenCreateDbModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-medium transition-colors shadow-xs"
+          title="Crear un nuevo archivo de base de datos Firebird (.fdb)"
+        >
+          <PlusCircle className="w-3.5 h-3.5" />
+          <span>Crear BD</span>
+        </button>
+
         <button
           onClick={onOpenConnectionModal}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-medium transition-colors shadow-xs"

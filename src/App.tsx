@@ -7,6 +7,7 @@ import { SqlEditor } from './components/Editor/SqlEditor';
 import { OutputPanel } from './components/Grid/OutputPanel';
 import { ConnectionModal } from './components/Modals/ConnectionModal';
 import { TableDetailsModal } from './components/Modals/TableDetailsModal';
+import { CreateDatabaseModal } from './components/Modals/CreateDatabaseModal';
 import { Database, Plus, Sparkles } from 'lucide-react';
 
 const INITIAL_QUERY = `-- Bienvenido a FirebirdYog
@@ -26,6 +27,7 @@ export const App: React.FC = () => {
   const [activeConfig, setActiveConfig] = useState<ConnectionConfig | null>(null);
   const [savedConnections, setSavedConnections] = useState<ConnectionConfig[]>([]);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+  const [isCreateDbModalOpen, setIsCreateDbModalOpen] = useState(false);
 
   // Schema metadata
   const [schemaObjects, setSchemaObjects] = useState<any | null>(null);
@@ -314,6 +316,17 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isConnected, activeTabId, tabs]);
 
+  // Handle database creation callback
+  const handleCreateAndConnect = async (config: ConnectionConfig, autoConnect: boolean, autoSave: boolean) => {
+    if (autoSave) {
+      loadSavedConnections();
+    }
+    if (autoConnect) {
+      setActiveConfig(config);
+      setIsConnected(true);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans select-none">
       
@@ -322,6 +335,7 @@ export const App: React.FC = () => {
         isConnected={isConnected}
         activeConfig={activeConfig}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
+        onOpenCreateDbModal={() => setIsCreateDbModalOpen(true)}
         onDisconnect={handleDisconnect}
         onNewQuery={handleAddTab}
       />
@@ -349,16 +363,25 @@ export const App: React.FC = () => {
               <div>
                 <h3 className="text-sm font-semibold text-zinc-300 mb-1">Sin Conexión</h3>
                 <p className="text-xs text-zinc-500 leading-relaxed">
-                  Conéctate a una base de datos Firebird para explorar sus tablas, vistas, triggers y procedimientos.
+                  Conéctate o crea una nueva base de datos Firebird para explorar sus tablas, vistas, triggers y procedimientos.
                 </p>
               </div>
-              <button
-                onClick={() => setIsConnectionModalOpen(true)}
-                className="mt-2 flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold rounded-lg text-xs transition-colors shadow-md shadow-amber-500/10"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Conectar Ahora
-              </button>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={() => setIsConnectionModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold rounded-lg text-xs transition-colors shadow-md shadow-amber-500/10"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  Conectar
+                </button>
+                <button
+                  onClick={() => setIsCreateDbModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs transition-colors shadow-md shadow-emerald-600/10"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Crear Nueva BD
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -415,7 +438,15 @@ export const App: React.FC = () => {
         onConnect={handleConnect}
         savedConnections={savedConnections}
         onRefreshConnections={loadSavedConnections}
+        onOpenCreateModal={() => setIsCreateDbModalOpen(true)}
         activeConfigId={activeConfig?.id}
+      />
+
+      {/* Create Database Modal */}
+      <CreateDatabaseModal
+        isOpen={isCreateDbModalOpen}
+        onClose={() => setIsCreateDbModalOpen(false)}
+        onCreateAndConnect={handleCreateAndConnect}
       />
 
       {/* Table Details Modal */}

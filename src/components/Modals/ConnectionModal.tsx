@@ -23,6 +23,7 @@ interface ConnectionModalProps {
   onConnect: (config: ConnectionConfig) => Promise<void>;
   savedConnections: ConnectionConfig[];
   onRefreshConnections: () => void;
+  onOpenCreateModal?: () => void;
   activeConfigId?: string;
 }
 
@@ -254,8 +255,23 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               </div>
             </div>
 
-            <div className="text-xs text-zinc-500 border-t border-zinc-800/80 pt-3">
-              Firebird Client v1.0 • Pure Wire Protocol
+            <div className="border-t border-zinc-800/80 pt-3 space-y-2">
+              {onOpenCreateModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenCreateModal();
+                  }}
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Crear Nueva Base (.fdb)...</span>
+                </button>
+              )}
+              <div className="text-[11px] text-zinc-500 text-center">
+                Firebird Client v1.0 • Pure Wire Protocol
+              </div>
             </div>
           </div>
 

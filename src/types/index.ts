@@ -116,6 +116,8 @@ export interface ElectronAPI {
   
   // File dialogs & utilities
   selectDatabaseFile: () => Promise<string | null>;
+  selectNewDatabaseFile: (defaultFilename?: string) => Promise<string | null>;
+  createDatabase: (config: ConnectionConfig) => Promise<IpcResponse<{ database: string }>>;
   saveSqlFile: (content: string, defaultPath?: string) => Promise<boolean>;
   openSqlFile: () => Promise<{ content: string; filePath: string } | null>;
   exportData: (data: string, defaultFilename: string, type: 'csv' | 'json' | 'sql') => Promise<boolean>;

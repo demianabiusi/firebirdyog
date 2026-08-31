@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   executeScript: (script: string) => ipcRenderer.invoke('fb:execute-script', script),
   
   selectDatabaseFile: () => ipcRenderer.invoke('dialog:select-database-file'),
+  selectNewDatabaseFile: (defaultFilename?: string) => ipcRenderer.invoke('dialog:select-new-database-file', defaultFilename),
+  createDatabase: (config: any) => ipcRenderer.invoke('fb:create-database', config),
   saveSqlFile: (content: string, defaultPath?: string) => ipcRenderer.invoke('dialog:save-sql-file', content, defaultPath),
   openSqlFile: () => ipcRenderer.invoke('dialog:open-sql-file'),
   exportData: (data: string, defaultFilename: string, type: 'csv' | 'json' | 'sql') => 
