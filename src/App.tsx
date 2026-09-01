@@ -8,6 +8,7 @@ import { OutputPanel } from './components/Grid/OutputPanel';
 import { ConnectionModal } from './components/Modals/ConnectionModal';
 import { TableDetailsModal } from './components/Modals/TableDetailsModal';
 import { CreateDatabaseModal } from './components/Modals/CreateDatabaseModal';
+import { TableDesignerModal } from './components/Modals/TableDesignerModal';
 import { Database, Plus, Sparkles } from 'lucide-react';
 
 const INITIAL_QUERY = `-- Bienvenido a FirebirdYog
@@ -28,6 +29,10 @@ export const App: React.FC = () => {
   const [savedConnections, setSavedConnections] = useState<ConnectionConfig[]>([]);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isCreateDbModalOpen, setIsCreateDbModalOpen] = useState(false);
+
+  // Table Designer states
+  const [isTableDesignerOpen, setIsTableDesignerOpen] = useState(false);
+  const [tableDesignerName, setTableDesignerName] = useState<string | null>(null);
 
   // Schema metadata
   const [schemaObjects, setSchemaObjects] = useState<any | null>(null);
@@ -316,6 +321,36 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isConnected, activeTabId, tabs]);
 
+  // Handle Table Designer
+  const handleOpenCreateTable = () => {
+    setTableDesignerName(null);
+    setIsTableDesignerOpen(true);
+  };
+
+  const handleOpenDesignTable = (tableName: string) => {
+    setTableDesignerName(tableName);
+    setIsTableDesignerOpen(true);
+  };
+
+  const handleTableDesignerSuccess = (tableName: string) => {
+    refreshSchema();
+  };
+
+  const handleOpenInSqlEditor = (sql: string, title?: string) => {
+    const newId = 'tab_' + Date.now();
+    const newTab: QueryTab = {
+      id: newId,
+      title: title || 'Diseño Tabla',
+      sql,
+      result: null,
+      isRunning: false,
+      error: null,
+      activeResultTab: 'messages'
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newId);
+  };
+
   // Handle database creation callback
   const handleCreateAndConnect = async (config: ConnectionConfig, autoConnect: boolean, autoSave: boolean) => {
     if (autoSave) {
@@ -353,6 +388,8 @@ export const App: React.FC = () => {
               onSelectObjectSql={handleSelectObjectSql}
               onShowTableDetails={(tbl) => setSelectedTableForDetails(tbl)}
               onEditObject={handleEditObject}
+              onCreateTable={handleOpenCreateTable}
+              onDesignTable={handleOpenDesignTable}
               databaseName={activeConfig?.database}
             />
           ) : (
@@ -447,6 +484,15 @@ export const App: React.FC = () => {
         isOpen={isCreateDbModalOpen}
         onClose={() => setIsCreateDbModalOpen(false)}
         onCreateAndConnect={handleCreateAndConnect}
+      />
+
+      {/* Table Designer Modal */}
+      <TableDesignerModal
+        isOpen={isTableDesignerOpen}
+        tableName={tableDesignerName}
+        onClose={() => setIsTableDesignerOpen(false)}
+        onSuccess={handleTableDesignerSuccess}
+        onOpenInSqlEditor={handleOpenInSqlEditor}
       />
 
       {/* Table Details Modal */}

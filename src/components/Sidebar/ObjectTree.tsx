@@ -14,7 +14,10 @@ import {
   Database,
   Code,
   Info,
-  Play
+  Play,
+  Plus,
+  Sliders,
+  Edit3
 } from 'lucide-react';
 
 interface SchemaObjects {
@@ -34,6 +37,8 @@ interface ObjectTreeProps {
   onSelectObjectSql: (sql: string, executeImmediately?: boolean) => void;
   onShowTableDetails: (tableName: string) => void;
   onEditObject: (type: 'PROCEDURE' | 'TRIGGER' | 'VIEW' | 'TABLE', name: string) => void;
+  onCreateTable?: () => void;
+  onDesignTable?: (tableName: string) => void;
   databaseName?: string;
 }
 
@@ -44,6 +49,8 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
   onSelectObjectSql,
   onShowTableDetails,
   onEditObject,
+  onCreateTable,
+  onDesignTable,
   databaseName
 }) => {
   const [searchFilter, setSearchFilter] = useState('');
@@ -189,9 +196,24 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
               <TableIcon className="w-3.5 h-3.5 text-blue-400" />
               <span>Tablas</span>
             </div>
-            <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-mono">
-              {filteredTables.length}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {onCreateTable && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateTable();
+                  }}
+                  title="Crear Nueva Tabla..."
+                  className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              )}
+              <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-mono">
+                {filteredTables.length}
+              </span>
+            </div>
           </div>
 
           {!collapsedSections.tables && (
@@ -214,13 +236,25 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {onDesignTable && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDesignTable(table);
+                          }}
+                          title="Diseñar / Editar estructura y campos"
+                          className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-400 rounded"
+                        >
+                          <Sliders className="w-3 h-3" />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onShowTableDetails(table);
                         }}
-                        title="Ver estructura y DDL"
-                        className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-300 rounded"
+                        title="Ver detalles e índices"
+                        className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-blue-300 rounded"
                       >
                         <Info className="w-3 h-3" />
                       </button>
