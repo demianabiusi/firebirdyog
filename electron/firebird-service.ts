@@ -275,6 +275,36 @@ export class FirebirdService {
     });
   }
 
+  private extractString(row: any, ...keys: string[]): string {
+    if (!row || typeof row !== 'object') return '';
+    for (const key of keys) {
+      for (const rowKey of Object.keys(row)) {
+        if (rowKey.toUpperCase() === key.toUpperCase()) {
+          const val = row[rowKey];
+          if (val === null || val === undefined) continue;
+          if (Buffer.isBuffer(val)) return val.toString('utf-8').trim();
+          return String(val).trim();
+        }
+      }
+    }
+    return '';
+  }
+
+  private extractNumber(row: any, ...keys: string[]): number {
+    if (!row || typeof row !== 'object') return 0;
+    for (const key of keys) {
+      for (const rowKey of Object.keys(row)) {
+        if (rowKey.toUpperCase() === key.toUpperCase()) {
+          const val = row[rowKey];
+          if (val === null || val === undefined) continue;
+          const num = Number(val);
+          return isNaN(num) ? 0 : num;
+        }
+      }
+    }
+    return 0;
+  }
+
   public async getSchemaObjects(): Promise<{
     tables: string[];
     views: string[];
@@ -367,21 +397,21 @@ export class FirebirdService {
       ]);
 
       return {
-        tables: tables.map(r => r.NAME),
-        views: views.map(r => r.NAME),
+        tables: tables.map(r => this.extractString(r, 'NAME', 'RDB$RELATION_NAME')).filter(Boolean),
+        views: views.map(r => this.extractString(r, 'NAME', 'RDB$RELATION_NAME')).filter(Boolean),
         procedures: procs.map(r => ({
-          name: r.NAME,
-          inputs: Number(r.INPUTS) || 0,
-          outputs: Number(r.OUTPUTS) || 0
-        })),
+          name: this.extractString(r, 'NAME', 'RDB$PROCEDURE_NAME'),
+          inputs: this.extractNumber(r, 'INPUTS', 'RDB$PROCEDURE_INPUTS'),
+          outputs: this.extractNumber(r, 'OUTPUTS', 'RDB$PROCEDURE_OUTPUTS')
+        })).filter(p => Boolean(p.name)),
         triggers: triggers.map(r => ({
-          name: r.NAME,
-          table: r.TABLE_NAME || '',
-          inactive: Number(r.INACTIVE) === 1
-        })),
-        generators: gens.map(r => r.NAME),
-        domains: domains.map(r => r.NAME),
-        exceptions: exceptions.map(r => r.NAME)
+          name: this.extractString(r, 'NAME', 'RDB$TRIGGER_NAME'),
+          table: this.extractString(r, 'TABLE_NAME', 'RDB$RELATION_NAME'),
+          inactive: this.extractNumber(r, 'INACTIVE', 'RDB$TRIGGER_INACTIVE') === 1
+        })).filter(t => Boolean(t.name)),
+        generators: gens.map(r => this.extractString(r, 'NAME', 'RDB$GENERATOR_NAME')).filter(Boolean),
+        domains: domains.map(r => this.extractString(r, 'NAME', 'RDB$FIELD_NAME')).filter(Boolean),
+        exceptions: exceptions.map(r => this.extractString(r, 'NAME', 'RDB$EXCEPTION_NAME')).filter(Boolean)
       };
     } catch (err: any) {
       throw new Error(`Error al consultar metadatos de Firebird: ${err.message}`);

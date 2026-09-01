@@ -61,50 +61,72 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
     setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const filterText = searchFilter.toLowerCase().trim();
+  const filterText = (searchFilter || '').toLowerCase().trim();
 
   const filteredTables = useMemo(() => {
-    if (!objects?.tables) return [];
-    return objects.tables.filter(t => t.toLowerCase().includes(filterText));
+    if (!objects?.tables || !Array.isArray(objects.tables)) return [];
+    return objects.tables
+      .filter((t): t is string => typeof t === 'string' && Boolean(t))
+      .filter(t => t.toLowerCase().includes(filterText));
   }, [objects?.tables, filterText]);
 
   const filteredViews = useMemo(() => {
-    if (!objects?.views) return [];
-    return objects.views.filter(v => v.toLowerCase().includes(filterText));
+    if (!objects?.views || !Array.isArray(objects.views)) return [];
+    return objects.views
+      .filter((v): v is string => typeof v === 'string' && Boolean(v))
+      .filter(v => v.toLowerCase().includes(filterText));
   }, [objects?.views, filterText]);
 
   const filteredProcedures = useMemo(() => {
-    if (!objects?.procedures) return [];
-    return objects.procedures.filter(p => p.name.toLowerCase().includes(filterText));
+    if (!objects?.procedures || !Array.isArray(objects.procedures)) return [];
+    return objects.procedures
+      .filter((p): p is { name: string; inputs: number; outputs: number } => Boolean(p && typeof p.name === 'string'))
+      .filter(p => p.name.toLowerCase().includes(filterText));
   }, [objects?.procedures, filterText]);
 
   const filteredTriggers = useMemo(() => {
-    if (!objects?.triggers) return [];
-    return objects.triggers.filter(t => 
-      t.name.toLowerCase().includes(filterText) || t.table.toLowerCase().includes(filterText)
-    );
+    if (!objects?.triggers || !Array.isArray(objects.triggers)) return [];
+    return objects.triggers
+      .filter((t): t is { name: string; table: string; inactive: boolean } => Boolean(t && typeof t.name === 'string'))
+      .filter(t => 
+        t.name.toLowerCase().includes(filterText) || 
+        (typeof t.table === 'string' && t.table.toLowerCase().includes(filterText))
+      );
   }, [objects?.triggers, filterText]);
 
   const filteredGenerators = useMemo(() => {
-    if (!objects?.generators) return [];
-    return objects.generators.filter(g => g.toLowerCase().includes(filterText));
+    if (!objects?.generators || !Array.isArray(objects.generators)) return [];
+    return objects.generators
+      .filter((g): g is string => typeof g === 'string' && Boolean(g))
+      .filter(g => g.toLowerCase().includes(filterText));
   }, [objects?.generators, filterText]);
 
   const filteredDomains = useMemo(() => {
-    if (!objects?.domains) return [];
-    return objects.domains.filter(d => d.toLowerCase().includes(filterText));
+    if (!objects?.domains || !Array.isArray(objects.domains)) return [];
+    return objects.domains
+      .filter((d): d is string => typeof d === 'string' && Boolean(d))
+      .filter(d => d.toLowerCase().includes(filterText));
   }, [objects?.domains, filterText]);
 
   const filteredExceptions = useMemo(() => {
-    if (!objects?.exceptions) return [];
-    return objects.exceptions.filter(e => e.toLowerCase().includes(filterText));
+    if (!objects?.exceptions || !Array.isArray(objects.exceptions)) return [];
+    return objects.exceptions
+      .filter((e): e is string => typeof e === 'string' && Boolean(e))
+      .filter(e => e.toLowerCase().includes(filterText));
   }, [objects?.exceptions, filterText]);
 
-  const totalCount = (objects?.tables.length || 0) +
-    (objects?.views.length || 0) +
-    (objects?.procedures.length || 0) +
-    (objects?.triggers.length || 0) +
-    (objects?.generators.length || 0);
+  const totalCount = 
+    (filteredTables.length || 0) +
+    (filteredViews.length || 0) +
+    (filteredProcedures.length || 0) +
+    (filteredTriggers.length || 0) +
+    (filteredGenerators.length || 0);
+
+  const displayDbName = useMemo(() => {
+    if (!databaseName || typeof databaseName !== 'string') return 'Explorador Firebird';
+    const clean = databaseName.replace(/\\/g, '/');
+    return clean.split('/').filter(Boolean).pop() || 'Explorador Firebird';
+  }, [databaseName]);
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 border-r border-zinc-800 select-none text-zinc-300">
@@ -115,7 +137,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
           <div className="flex items-center gap-1.5 min-w-0">
             <Database className="w-4 h-4 text-amber-500 shrink-0" />
             <span className="text-xs font-semibold text-zinc-200 truncate uppercase tracking-wider">
-              {databaseName ? databaseName.split('/').pop()?.split('\\').pop() : 'Explorador Firebird'}
+              {displayDbName}
             </span>
           </div>
           <button
