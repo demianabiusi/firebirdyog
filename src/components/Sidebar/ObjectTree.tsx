@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Table as TableIcon, 
   Eye, 
@@ -17,7 +17,11 @@ import {
   Play,
   Plus,
   Sliders,
-  Edit3
+  Copy,
+  Trash2,
+  FileText,
+  Layers,
+  Check
 } from 'lucide-react';
 
 interface SchemaObjects {
@@ -45,6 +49,29 @@ interface ObjectTreeProps {
   databaseName?: string;
 }
 
+type ContextMenuItemType = 
+  | 'TABLE' 
+  | 'TABLE_SECTION' 
+  | 'VIEW' 
+  | 'VIEW_SECTION' 
+  | 'PROCEDURE' 
+  | 'PROCEDURE_SECTION' 
+  | 'TRIGGER' 
+  | 'TRIGGER_SECTION' 
+  | 'GENERATOR' 
+  | 'GENERATOR_SECTION' 
+  | 'DOMAIN' 
+  | 'EXCEPTION';
+
+interface ContextMenuState {
+  isOpen: boolean;
+  x: number;
+  y: number;
+  itemType: ContextMenuItemType;
+  name: string;
+  meta?: any;
+}
+
 export const ObjectTree: React.FC<ObjectTreeProps> = ({
   objects,
   isLoading,
@@ -70,8 +97,63 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
     exceptions: true
   });
 
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close context menu on outside click or escape
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+
+    if (contextMenu?.isOpen) {
+      window.addEventListener('mousedown', handleOutsideClick);
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu]);
+
   const toggleSection = (key: string) => {
     setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const openContextMenu = (e: React.MouseEvent, itemType: ContextMenuItemType, name: string = '', meta?: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const menuWidth = 240;
+    const menuHeight = 320;
+    const clickX = e.clientX;
+    const clickY = e.clientY;
+
+    const x = clickX + menuWidth > window.innerWidth ? Math.max(10, clickX - menuWidth) : clickX;
+    const y = clickY + menuHeight > window.innerHeight ? Math.max(10, clickY - menuHeight) : clickY;
+
+    setContextMenu({
+      isOpen: true,
+      x,
+      y,
+      itemType,
+      name,
+      meta
+    });
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedNotification(`Copiado: ${text}`);
+    setTimeout(() => setCopiedNotification(null), 2000);
+    setContextMenu(null);
   };
 
   const filterText = (searchFilter || '').toLowerCase().trim();
@@ -128,13 +210,6 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
       .filter(e => e.toLowerCase().includes(filterText));
   }, [objects?.exceptions, filterText]);
 
-  const totalCount = 
-    (filteredTables.length || 0) +
-    (filteredViews.length || 0) +
-    (filteredProcedures.length || 0) +
-    (filteredTriggers.length || 0) +
-    (filteredGenerators.length || 0);
-
   const displayDbName = useMemo(() => {
     if (!databaseName || typeof databaseName !== 'string') return 'Explorador Firebird';
     const clean = databaseName.replace(/\\/g, '/');
@@ -142,10 +217,10 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
   }, [databaseName]);
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 border-r border-zinc-800 select-none text-zinc-300">
+    <div className="flex flex-col h-full bg-zinc-900 border-r border-zinc-800 select-none text-zinc-300 relative">
       
       {/* Header bar */}
-      <div className="p-3 border-b border-zinc-800/80 bg-zinc-950/40">
+      <div className="p-3 border-b border-zinc-800/80 bg-zinc-950/40 shrink-0">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <Database className="w-4 h-4 text-amber-500 shrink-0" />
@@ -191,6 +266,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
         <div>
           <div
             onClick={() => toggleSection('tables')}
+            onContextMenu={(e) => openContextMenu(e, 'TABLE_SECTION', 'Tablas')}
             className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-zinc-800/60 cursor-pointer text-zinc-300 font-medium group transition-colors"
           >
             <div className="flex items-center gap-1.5">
@@ -230,12 +306,13 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredTables.map((table) => (
                   <div
                     key={table}
+                    onContextMenu={(e) => openContextMenu(e, 'TABLE', table)}
                     className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-zinc-100 transition-colors"
                   >
                     <div
                       className="flex items-center gap-2 min-w-0 flex-1 truncate"
                       onClick={() => onSelectObjectSql(`SELECT * FROM ${table} ROWS 100;`, true)}
-                      title={`Clic para consultar: SELECT * FROM ${table} ROWS 100;`}
+                      title={`Clic: consultar | Clic derecho: menú contextual`}
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                       <span className="truncate font-mono text-[11.5px]">{table}</span>
@@ -248,7 +325,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                             e.stopPropagation();
                             onDesignTable(table);
                           }}
-                          title="Diseñar / Editar estructura y campos"
+                          title="Diseñar / Modificar Tabla"
                           className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-400 rounded"
                         >
                           <Sliders className="w-3 h-3" />
@@ -259,7 +336,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                           e.stopPropagation();
                           onShowTableDetails(table);
                         }}
-                        title="Ver detalles e índices"
+                        title="Ver Detalles e Índices"
                         className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-blue-300 rounded"
                       >
                         <Info className="w-3 h-3" />
@@ -269,7 +346,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                           e.stopPropagation();
                           onSelectObjectSql(`SELECT * FROM ${table} ROWS 100;`, true);
                         }}
-                        title="Ejecutar SELECT"
+                        title="Consultar Primeros 100 Registros"
                         className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
                       >
                         <Play className="w-3 h-3" />
@@ -286,6 +363,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
         <div>
           <div
             onClick={() => toggleSection('views')}
+            onContextMenu={(e) => openContextMenu(e, 'VIEW_SECTION', 'Vistas')}
             className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-zinc-800/60 cursor-pointer text-zinc-300 font-medium group transition-colors"
           >
             <div className="flex items-center gap-1.5">
@@ -325,12 +403,13 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredViews.map((view) => (
                   <div
                     key={view}
+                    onContextMenu={(e) => openContextMenu(e, 'VIEW', view)}
                     className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-teal-300 transition-colors"
                   >
                     <div
                       className="flex items-center gap-2 min-w-0 flex-1 truncate"
                       onClick={() => onSelectObjectSql(`SELECT * FROM ${view} ROWS 100;`, true)}
-                      title={`Clic para consultar: SELECT * FROM ${view} ROWS 100;`}
+                      title={`Clic: consultar | Clic derecho: menú contextual`}
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
                       <span className="truncate font-mono text-[11.5px]">{view}</span>
@@ -369,6 +448,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
         <div>
           <div
             onClick={() => toggleSection('procedures')}
+            onContextMenu={(e) => openContextMenu(e, 'PROCEDURE_SECTION', 'Procedimientos')}
             className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-zinc-800/60 cursor-pointer text-zinc-300 font-medium group transition-colors"
           >
             <div className="flex items-center gap-1.5">
@@ -408,6 +488,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredProcedures.map((proc) => (
                   <div
                     key={proc.name}
+                    onContextMenu={(e) => openContextMenu(e, 'PROCEDURE', proc.name, proc)}
                     className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-amber-300 transition-colors"
                   >
                     <div
@@ -420,7 +501,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                         }
                       }}
                       onDoubleClick={() => onEditObject('PROCEDURE', proc.name)}
-                      title={`Clic: consultar plantilla | Doble clic: editar código`}
+                      title={`Clic: consultar plantilla | Clic derecho: menú contextual`}
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                       <span className="truncate font-mono text-[11.5px]">{proc.name}</span>
@@ -469,6 +550,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
         <div>
           <div
             onClick={() => toggleSection('triggers')}
+            onContextMenu={(e) => openContextMenu(e, 'TRIGGER_SECTION', 'Triggers')}
             className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-zinc-800/60 cursor-pointer text-zinc-300 font-medium group transition-colors"
           >
             <div className="flex items-center gap-1.5">
@@ -508,12 +590,13 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredTriggers.map((trig) => (
                   <div
                     key={trig.name}
+                    onContextMenu={(e) => openContextMenu(e, 'TRIGGER', trig.name, trig)}
                     className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-yellow-300 transition-colors"
                   >
                     <div
                       className="flex items-center gap-2 min-w-0 flex-1 truncate"
                       onClick={() => onEditObject('TRIGGER', trig.name)}
-                      title={`Clic para editar trigger ${trig.name}`}
+                      title={`Clic: editar trigger | Clic derecho: menú contextual`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${trig.inactive ? 'bg-zinc-600' : 'bg-yellow-500'} shrink-0`} />
                       <span className="truncate font-mono text-[11.5px]">{trig.name}</span>
@@ -547,6 +630,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
         <div>
           <div
             onClick={() => toggleSection('generators')}
+            onContextMenu={(e) => openContextMenu(e, 'GENERATOR_SECTION', 'Generadores')}
             className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-zinc-800/60 cursor-pointer text-zinc-300 font-medium group transition-colors"
           >
             <div className="flex items-center gap-1.5">
@@ -571,9 +655,10 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredGenerators.map((gen) => (
                   <div
                     key={gen}
+                    onContextMenu={(e) => openContextMenu(e, 'GENERATOR', gen)}
                     onClick={() => onSelectObjectSql(`SELECT GEN_ID(${gen}, 0) AS VALOR_ACTUAL FROM RDB$DATABASE;`, true)}
                     className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-purple-300 transition-colors"
-                    title={`Ver valor actual del generador ${gen}`}
+                    title={`Clic: consultar valor actual | Clic derecho: opciones`}
                   >
                     <div className="flex items-center gap-2 min-w-0 truncate">
                       <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
@@ -614,7 +699,9 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 filteredDomains.map((domain) => (
                   <div
                     key={domain}
+                    onContextMenu={(e) => openContextMenu(e, 'DOMAIN', domain)}
                     className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-pink-300 transition-colors"
+                    title={`Clic derecho: opciones`}
                   >
                     <div className="flex items-center gap-2 min-w-0 truncate">
                       <span className="w-1.5 h-1.5 rounded-full bg-pink-500 shrink-0" />
@@ -652,14 +739,16 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
               {filteredExceptions.length === 0 ? (
                 <div className="text-[11px] text-zinc-500 py-1 pl-2 italic">Sin excepciones</div>
               ) : (
-                filteredExceptions.map((exc) => (
+                filteredExceptions.map((ex) => (
                   <div
-                    key={exc}
+                    key={ex}
+                    onContextMenu={(e) => openContextMenu(e, 'EXCEPTION', ex)}
                     className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-rose-300 transition-colors"
+                    title={`Clic derecho: opciones`}
                   >
                     <div className="flex items-center gap-2 min-w-0 truncate">
                       <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                      <span className="truncate font-mono text-[11.5px]">{exc}</span>
+                      <span className="truncate font-mono text-[11.5px]">{ex}</span>
                     </div>
                   </div>
                 ))
@@ -670,11 +759,355 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
 
       </div>
 
-      {/* Footer stats */}
-      <div className="p-2.5 border-t border-zinc-800/80 bg-zinc-950/60 text-[11px] text-zinc-500 flex items-center justify-between">
-        <span>Total objetos: <strong className="text-zinc-300 font-mono">{totalCount}</strong></span>
-        <span className="text-[10px] text-amber-500/80 font-medium">Firebird DB</span>
-      </div>
+      {/* Floating Copied Notification */}
+      {copiedNotification && (
+        <div className="absolute bottom-3 left-3 right-3 bg-zinc-950 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-lg text-[11px] flex items-center gap-2 shadow-xl animate-in fade-in slide-in-from-bottom-2 z-50">
+          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span className="truncate font-mono">{copiedNotification}</span>
+        </div>
+      )}
+
+      {/* Context Menu Popup */}
+      {contextMenu?.isOpen && (
+        <div
+          ref={menuRef}
+          style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+          className="fixed z-50 bg-zinc-900/95 border border-zinc-700/80 shadow-2xl rounded-xl backdrop-blur-md p-1 min-w-[220px] text-xs text-zinc-200 animate-in fade-in zoom-in-95 duration-100 divide-y divide-zinc-800/80"
+          onClick={() => setContextMenu(null)}
+        >
+          {/* Header of Context Menu */}
+          <div className="px-2.5 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+            <span className="truncate max-w-[170px] font-mono text-zinc-300">
+              {contextMenu.name || contextMenu.itemType}
+            </span>
+            <span className="text-zinc-500 text-[9px]">Menú</span>
+          </div>
+
+          {/* TABLE Actions */}
+          {contextMenu.itemType === 'TABLE' && (
+            <div className="py-1 space-y-0.5">
+              <button
+                onClick={() => onSelectObjectSql(`SELECT * FROM ${contextMenu.name} ROWS 100;`, true)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-emerald-400 rounded-md text-left transition-colors"
+              >
+                <Play className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Consultar Primeros 100</span>
+              </button>
+
+              <button
+                onClick={() => onShowTableDetails(contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-blue-400 rounded-md text-left transition-colors"
+              >
+                <Info className="w-3.5 h-3.5 text-blue-400" />
+                <span>Ver Detalles e Índices...</span>
+              </button>
+
+              {onDesignTable && (
+                <button
+                  onClick={() => onDesignTable(contextMenu.name)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-amber-400 rounded-md text-left transition-colors"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Diseñar / Modificar Tabla...</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => copyToClipboard(contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Copiar Nombre de Tabla</span>
+              </button>
+
+              <div className="pt-1 mt-1 border-t border-zinc-800">
+                <div className="px-2 py-0.5 text-[10px] text-zinc-500 font-semibold uppercase">Generar Plantilla SQL:</div>
+                <button
+                  onClick={() => onSelectObjectSql(`SELECT * FROM ${contextMenu.name};`, false)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1 hover:bg-zinc-800 text-zinc-300 hover:text-blue-300 rounded text-left"
+                >
+                  <FileText className="w-3 h-3 text-zinc-400" />
+                  <span>SELECT * FROM ...</span>
+                </button>
+                <button
+                  onClick={() => onSelectObjectSql(`INSERT INTO ${contextMenu.name} (/* campos */)\nVALUES (/* valores */);`, false)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1 hover:bg-zinc-800 text-zinc-300 hover:text-blue-300 rounded text-left"
+                >
+                  <FileText className="w-3 h-3 text-zinc-400" />
+                  <span>INSERT INTO ...</span>
+                </button>
+                <button
+                  onClick={() => onSelectObjectSql(`UPDATE ${contextMenu.name}\nSET CAMPO = VALOR\nWHERE CONDICION;`, false)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1 hover:bg-zinc-800 text-zinc-300 hover:text-blue-300 rounded text-left"
+                >
+                  <FileText className="w-3 h-3 text-zinc-400" />
+                  <span>UPDATE ...</span>
+                </button>
+                <button
+                  onClick={() => onSelectObjectSql(`DELETE FROM ${contextMenu.name}\nWHERE CONDICION;`, false)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1 hover:bg-zinc-800 text-red-300 hover:text-red-200 rounded text-left"
+                >
+                  <Trash2 className="w-3 h-3 text-red-400" />
+                  <span>DELETE FROM ...</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TABLE SECTION Actions */}
+          {contextMenu.itemType === 'TABLE_SECTION' && (
+            <div className="py-1 space-y-0.5">
+              {onCreateTable && (
+                <button
+                  onClick={onCreateTable}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-emerald-400 rounded-md text-left transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Crear Nueva Tabla...</span>
+                </button>
+              )}
+              <button
+                onClick={onRefresh}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Refrescar Lista de Tablas</span>
+              </button>
+            </div>
+          )}
+
+          {/* VIEW Actions */}
+          {contextMenu.itemType === 'VIEW' && (
+            <div className="py-1 space-y-0.5">
+              <button
+                onClick={() => onSelectObjectSql(`SELECT * FROM ${contextMenu.name} ROWS 100;`, true)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-emerald-400 rounded-md text-left transition-colors"
+              >
+                <Play className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Consultar Primeros 100</span>
+              </button>
+
+              <button
+                onClick={() => onEditObject('VIEW', contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-teal-400 rounded-md text-left transition-colors"
+              >
+                <Code className="w-3.5 h-3.5 text-teal-400" />
+                <span>Editar / Ver DDL de la Vista</span>
+              </button>
+
+              <button
+                onClick={() => copyToClipboard(contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Copiar Nombre</span>
+              </button>
+
+              <button
+                onClick={() => onSelectObjectSql(`DROP VIEW ${contextMenu.name};`, false)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 text-red-300 hover:text-red-200 rounded-md text-left transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                <span>Eliminar (DROP VIEW)</span>
+              </button>
+            </div>
+          )}
+
+          {/* VIEW SECTION Actions */}
+          {contextMenu.itemType === 'VIEW_SECTION' && (
+            <div className="py-1 space-y-0.5">
+              {onCreateView && (
+                <button
+                  onClick={onCreateView}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-teal-400 rounded-md text-left transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Crear Nueva Vista...</span>
+                </button>
+              )}
+              <button
+                onClick={onRefresh}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Refrescar Lista</span>
+              </button>
+            </div>
+          )}
+
+          {/* PROCEDURE Actions */}
+          {contextMenu.itemType === 'PROCEDURE' && (
+            <div className="py-1 space-y-0.5">
+              <button
+                onClick={() => onEditObject('PROCEDURE', contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-amber-400 rounded-md text-left transition-colors"
+              >
+                <Code className="w-3.5 h-3.5 text-amber-400" />
+                <span>Editar / Ver Código (DDL)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const isSelectable = contextMenu.meta?.outputs > 0;
+                  onSelectObjectSql(isSelectable ? `SELECT * FROM ${contextMenu.name};` : `EXECUTE PROCEDURE ${contextMenu.name};`, true);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-emerald-400 rounded-md text-left transition-colors"
+              >
+                <Play className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Ejecutar Procedimiento</span>
+              </button>
+
+              <button
+                onClick={() => copyToClipboard(contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Copiar Nombre</span>
+              </button>
+
+              <button
+                onClick={() => onSelectObjectSql(`DROP PROCEDURE ${contextMenu.name};`, false)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 text-red-300 hover:text-red-200 rounded-md text-left transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                <span>Eliminar (DROP PROCEDURE)</span>
+              </button>
+            </div>
+          )}
+
+          {/* PROCEDURE SECTION Actions */}
+          {contextMenu.itemType === 'PROCEDURE_SECTION' && (
+            <div className="py-1 space-y-0.5">
+              {onCreateProcedure && (
+                <button
+                  onClick={onCreateProcedure}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-amber-400 rounded-md text-left transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Crear Nuevo Procedimiento...</span>
+                </button>
+              )}
+              <button
+                onClick={onRefresh}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Refrescar Lista</span>
+              </button>
+            </div>
+          )}
+
+          {/* TRIGGER Actions */}
+          {contextMenu.itemType === 'TRIGGER' && (
+            <div className="py-1 space-y-0.5">
+              <button
+                onClick={() => onEditObject('TRIGGER', contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-yellow-400 rounded-md text-left transition-colors"
+              >
+                <Code className="w-3.5 h-3.5 text-yellow-400" />
+                <span>Editar / Ver Código (DDL)</span>
+              </button>
+
+              <button
+                onClick={() => copyToClipboard(contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Copiar Nombre</span>
+              </button>
+
+              <button
+                onClick={() => onSelectObjectSql(`DROP TRIGGER ${contextMenu.name};`, false)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 text-red-300 hover:text-red-200 rounded-md text-left transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                <span>Eliminar (DROP TRIGGER)</span>
+              </button>
+            </div>
+          )}
+
+          {/* TRIGGER SECTION Actions */}
+          {contextMenu.itemType === 'TRIGGER_SECTION' && (
+            <div className="py-1 space-y-0.5">
+              {onCreateTrigger && (
+                <button
+                  onClick={onCreateTrigger}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-yellow-400 rounded-md text-left transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5 text-yellow-400" />
+                  <span>Crear Nuevo Trigger...</span>
+                </button>
+              )}
+              <button
+                onClick={onRefresh}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Refrescar Lista</span>
+              </button>
+            </div>
+          )}
+
+          {/* GENERATOR Actions */}
+          {contextMenu.itemType === 'GENERATOR' && (
+            <div className="py-1 space-y-0.5">
+              <button
+                onClick={() => onSelectObjectSql(`SELECT GEN_ID(${contextMenu.name}, 0) AS VALOR_ACTUAL FROM RDB$DATABASE;`, true)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-purple-400 rounded-md text-left transition-colors"
+              >
+                <Play className="w-3.5 h-3.5 text-purple-400" />
+                <span>Consultar Valor Actual (GEN_ID, 0)</span>
+              </button>
+
+              <button
+                onClick={() => onSelectObjectSql(`SELECT GEN_ID(${contextMenu.name}, 1) AS NUEVO_VALOR FROM RDB$DATABASE;`, true)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-purple-400 rounded-md text-left transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5 text-purple-400" />
+                <span>Incrementar en +1 (GEN_ID, 1)</span>
+              </button>
+
+              <button
+                onClick={() => copyToClipboard(contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Copiar Nombre</span>
+              </button>
+
+              <button
+                onClick={() => onSelectObjectSql(`DROP SEQUENCE ${contextMenu.name};`, false)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 text-red-300 hover:text-red-200 rounded-md text-left transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                <span>Eliminar (DROP SEQUENCE)</span>
+              </button>
+            </div>
+          )}
+
+          {/* DOMAIN / EXCEPTION Actions */}
+          {(contextMenu.itemType === 'DOMAIN' || contextMenu.itemType === 'EXCEPTION') && (
+            <div className="py-1 space-y-0.5">
+              <button
+                onClick={() => copyToClipboard(contextMenu.name)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Copiar Nombre</span>
+              </button>
+
+              <button
+                onClick={() => onSelectObjectSql(`DROP ${contextMenu.itemType === 'DOMAIN' ? 'DOMAIN' : 'EXCEPTION'} ${contextMenu.name};`, false)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 text-red-300 hover:text-red-200 rounded-md text-left transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                <span>Eliminar ({contextMenu.itemType === 'DOMAIN' ? 'DROP DOMAIN' : 'DROP EXCEPTION'})</span>
+              </button>
+            </div>
+          )}
+
+        </div>
+      )}
 
     </div>
   );

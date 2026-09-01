@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeImage, NativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeImage, NativeImage, Menu } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { FirebirdService } from './firebird-service';
@@ -37,6 +37,9 @@ function getAppIcon(): NativeImage | string | undefined {
 function createWindow() {
   const appIcon = getAppIcon();
 
+  // Disable default native Electron menu
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1300,
     height: 850,
@@ -45,6 +48,7 @@ function createWindow() {
     title: 'FirebirdYog - Firebird Database Client',
     icon: appIcon,
     backgroundColor: '#09090b',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
