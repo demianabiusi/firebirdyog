@@ -490,6 +490,7 @@ export const App: React.FC = () => {
       <TableDesignerModal
         isOpen={isTableDesignerOpen}
         tableName={tableDesignerName}
+        existingGenerators={schemaObjects?.generators || []}
         onClose={() => setIsTableDesignerOpen(false)}
         onSuccess={handleTableDesignerSuccess}
         onOpenInSqlEditor={handleOpenInSqlEditor}

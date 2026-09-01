@@ -20,7 +20,10 @@ import {
   FileCode,
   Sparkles,
   RefreshCw,
-  Edit3
+  Edit3,
+  Zap,
+  Layers,
+  Database
 } from 'lucide-react';
 
 export interface DesignerColumn {
@@ -38,29 +41,40 @@ export interface DesignerColumn {
   isNew?: boolean;
 }
 
+export interface AutoIncConfig {
+  enabled: boolean;
+  targetField: string;
+  createGenerator: boolean;
+  generatorName: string;
+  existingGenerator: string;
+  startValue: number;
+  triggerName: string;
+}
+
 interface TableDesignerModalProps {
   isOpen: boolean;
   onClose: () => void;
   tableName: string | null; // null => CREATE TABLE, string => ALTER TABLE
+  existingGenerators?: string[];
   onSuccess: (tableName: string) => void;
   onOpenInSqlEditor: (sql: string, title?: string) => void;
 }
 
 const FIREBIRD_DATA_TYPES = [
-  { value: 'VARCHAR', label: 'VARCHAR', hasLength: true, defaultLength: '100' },
-  { value: 'CHAR', label: 'CHAR', hasLength: true, defaultLength: '1' },
-  { value: 'INTEGER', label: 'INTEGER', hasLength: false },
-  { value: 'BIGINT', label: 'BIGINT', hasLength: false },
-  { value: 'SMALLINT', label: 'SMALLINT', hasLength: false },
-  { value: 'NUMERIC', label: 'NUMERIC(p, s)', hasLength: true, hasScale: true, defaultLength: '15', defaultScale: '2' },
+  { value: 'INTEGER', label: 'INTEGER (Entero 32-bit - Estándar PK)', hasLength: false },
+  { value: 'BIGINT', label: 'BIGINT (Entero 64-bit - Gran volumen PK)', hasLength: false },
+  { value: 'SMALLINT', label: 'SMALLINT (Entero 16-bit)', hasLength: false },
+  { value: 'VARCHAR', label: 'VARCHAR(n) (Texto variable)', hasLength: true, defaultLength: '100' },
+  { value: 'CHAR', label: 'CHAR(n) (Texto fijo)', hasLength: true, defaultLength: '1' },
+  { value: 'NUMERIC', label: 'NUMERIC(p, s) (Moneda / Precisión)', hasLength: true, hasScale: true, defaultLength: '15', defaultScale: '2' },
   { value: 'DECIMAL', label: 'DECIMAL(p, s)', hasLength: true, hasScale: true, defaultLength: '15', defaultScale: '2' },
-  { value: 'TIMESTAMP', label: 'TIMESTAMP', hasLength: false },
-  { value: 'DATE', label: 'DATE', hasLength: false },
-  { value: 'TIME', label: 'TIME', hasLength: false },
+  { value: 'TIMESTAMP', label: 'TIMESTAMP (Fecha y hora)', hasLength: false },
+  { value: 'DATE', label: 'DATE (Fecha)', hasLength: false },
+  { value: 'TIME', label: 'TIME (Hora)', hasLength: false },
   { value: 'DOUBLE PRECISION', label: 'DOUBLE PRECISION', hasLength: false },
   { value: 'FLOAT', label: 'FLOAT', hasLength: false },
-  { value: 'BLOB SUB_TYPE TEXT', label: 'BLOB (Texto / Memo)', hasLength: false },
-  { value: 'BLOB SUB_TYPE BINARY', label: 'BLOB (Binario / Imagen)', hasLength: false },
+  { value: 'BLOB SUB_TYPE TEXT', label: 'BLOB TEXT (Memo / Documento)', hasLength: false },
+  { value: 'BLOB SUB_TYPE BINARY', label: 'BLOB BINARY (Archivos / Imágenes)', hasLength: false },
   { value: 'BOOLEAN', label: 'BOOLEAN (FB 3+)', hasLength: false }
 ];
 
@@ -68,6 +82,7 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
   isOpen,
   onClose,
   tableName,
+  existingGenerators = [],
   onSuccess,
   onOpenInSqlEditor
 }) => {
@@ -77,8 +92,19 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
   const [columns, setColumns] = useState<DesignerColumn[]>([]);
   const [deletedColumns, setDeletedColumns] = useState<DesignerColumn[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-  const [activeTab, setActiveTab] = useState<'designer' | 'sql'>('designer');
+  const [activeTab, setActiveTab] = useState<'designer' | 'autoinc' | 'sql'>('designer');
   
+  // Auto-Increment (Generator + Trigger) configuration
+  const [autoInc, setAutoInc] = useState<AutoIncConfig>({
+    enabled: true,
+    targetField: 'ID',
+    createGenerator: true,
+    generatorName: 'GEN_NUEVA_TABLA_ID',
+    existingGenerator: existingGenerators[0] || '',
+    startValue: 1,
+    triggerName: 'TR_NUEVA_TABLA_BI'
+  });
+
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionError, setExecutionError] = useState<string | null>(null);
 
@@ -93,9 +119,19 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
     if (isEditMode && tableName) {
       setCurrentTableName(tableName);
       loadTableStructure(tableName);
+      // In edit mode, auto-increment toggle is disabled by default unless user chooses to create it
+      setAutoInc({
+        enabled: false,
+        targetField: 'ID',
+        createGenerator: true,
+        generatorName: `GEN_${tableName}_ID`,
+        existingGenerator: existingGenerators[0] || '',
+        startValue: 1,
+        triggerName: `TR_${tableName}_BI`
+      });
     } else {
-      setCurrentTableName('NUEVA_TABLA');
-      // Default template for new table
+      const defaultTable = 'NUEVA_TABLA';
+      setCurrentTableName(defaultTable);
       setColumns([
         {
           id: 'col_' + Date.now() + '_1',
@@ -131,8 +167,32 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
           isNew: true
         }
       ]);
+
+      setAutoInc({
+        enabled: true,
+        targetField: 'ID',
+        createGenerator: true,
+        generatorName: `GEN_${defaultTable}_ID`,
+        existingGenerator: existingGenerators[0] || '',
+        startValue: 1,
+        triggerName: `TR_${defaultTable}_BI`
+      });
     }
   }, [isOpen, tableName, isEditMode]);
+
+  // Keep autoInc generator/trigger names in sync with table name & target field if untouched
+  useEffect(() => {
+    const tbl = currentTableName.trim().toUpperCase() || 'TABLA';
+    const pkCol = columns.find(c => c.isPrimaryKey)?.name || columns[0]?.name || 'ID';
+    const target = autoInc.targetField || pkCol;
+
+    setAutoInc(prev => ({
+      ...prev,
+      targetField: target,
+      generatorName: prev.generatorName.startsWith('GEN_') ? `GEN_${tbl}_${target}` : prev.generatorName,
+      triggerName: prev.triggerName.startsWith('TR_') ? `TR_${tbl}_BI` : prev.triggerName
+    }));
+  }, [currentTableName]);
 
   const loadTableStructure = async (tbl: string) => {
     setIsLoadingDetails(true);
@@ -141,7 +201,6 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
         const res = await window.electronAPI.getTableDetails(tbl);
         if (res.success && res.data) {
           const loadedCols: DesignerColumn[] = res.data.columns.map((c, idx) => {
-            // Parse base type & length
             let baseType = 'VARCHAR';
             let len = '';
             let sc = '';
@@ -197,6 +256,17 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
             };
           });
           setColumns(loadedCols);
+
+          // If table has a PK, set targetField for autoInc
+          const pk = loadedCols.find(c => c.isPrimaryKey);
+          if (pk) {
+            setAutoInc(prev => ({
+              ...prev,
+              targetField: pk.name,
+              generatorName: `GEN_${tbl}_${pk.name}`,
+              triggerName: `TR_${tbl}_BI`
+            }));
+          }
         }
       }
     } catch (err: any) {
@@ -208,7 +278,6 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
 
   // Helper to format full data type with length/scale
   const formatFullDataType = (col: DesignerColumn): string => {
-    const typeMeta = FIREBIRD_DATA_TYPES.find(t => t.value === col.type);
     if (col.type === 'VARCHAR' || col.type === 'CHAR') {
       const l = col.length.trim() || '50';
       return `${col.type}(${l})`;
@@ -221,9 +290,10 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
     return col.type;
   };
 
-  // Generate DDL script based on changes
+  // Generate DDL script based on changes & auto-increment settings
   const generatedSql = useMemo(() => {
     const tblName = currentTableName.trim().toUpperCase() || 'NUEVA_TABLA';
+    const statements: string[] = [];
 
     if (!isEditMode) {
       // CREATE TABLE
@@ -250,11 +320,9 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
       }
 
       ddl += colDefs.join(',\n') + '\n);';
-      return ddl;
+      statements.push(ddl);
     } else {
       // ALTER TABLE operations
-      const statements: string[] = [];
-
       // 1. Dropped columns
       deletedColumns.forEach(del => {
         if (del.originalName) {
@@ -287,7 +355,7 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
         }
       });
 
-      // 4. Modified data types (Firebird: ALTER TABLE t ALTER COLUMN col_name TYPE new_type)
+      // 4. Modified data types
       columns.forEach(col => {
         if (!col.isNew && col.name.trim()) {
           const newTypeStr = formatFullDataType(col);
@@ -302,19 +370,46 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
       columns.forEach((col, idx) => {
         const targetPos = idx + 1;
         const effectiveName = col.name.trim().toUpperCase();
-        // Check if position changed
         if (col.originalPosition !== targetPos && effectiveName) {
           statements.push(`ALTER TABLE ${tblName} ALTER COLUMN ${effectiveName} POSITION ${targetPos};`);
         }
       });
+    }
 
-      if (statements.length === 0) {
-        return `-- No se han detectado modificaciones en la estructura de la tabla ${tblName}`;
+    // Auto-Increment Generator & Trigger DDL
+    if (autoInc.enabled && autoInc.targetField) {
+      const fieldName = autoInc.targetField.trim().toUpperCase();
+      const genName = autoInc.createGenerator 
+        ? (autoInc.generatorName.trim().toUpperCase() || `GEN_${tblName}_${fieldName}`)
+        : (autoInc.existingGenerator.trim().toUpperCase() || `GEN_${tblName}_${fieldName}`);
+      
+      const trName = autoInc.triggerName.trim().toUpperCase() || `TR_${tblName}_BI`;
+
+      if (autoInc.createGenerator) {
+        statements.push(`\n-- Crear Generador / Secuencia`);
+        statements.push(`CREATE SEQUENCE ${genName};`);
+
+        if (autoInc.startValue > 1) {
+          statements.push(`ALTER SEQUENCE ${genName} RESTART WITH ${autoInc.startValue - 1};`);
+        }
       }
 
-      return statements.join('\n');
+      statements.push(`\n-- Crear Trigger Auto-incremental BEFORE INSERT`);
+      statements.push(`CREATE OR ALTER TRIGGER ${trName} FOR ${tblName}
+ACTIVE BEFORE INSERT POSITION 0
+AS
+BEGIN
+    IF (NEW.${fieldName} IS NULL OR NEW.${fieldName} = 0) THEN
+        NEW.${fieldName} = GEN_ID(${genName}, 1);
+END;`);
     }
-  }, [currentTableName, columns, deletedColumns, isEditMode]);
+
+    if (statements.length === 0) {
+      return `-- No se han detectado modificaciones en la estructura de la tabla ${tblName}`;
+    }
+
+    return statements.join('\n');
+  }, [currentTableName, columns, deletedColumns, isEditMode, autoInc]);
 
   // Actions
   const handleAddColumn = () => {
@@ -371,6 +466,15 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
       if (typeInfo?.hasScale && !newCols[index].scale) {
         newCols[index].scale = typeInfo.defaultScale || '2';
       }
+    }
+
+    // If primary key is set, automatically update autoInc targetField
+    if (field === 'isPrimaryKey' && value === true) {
+      setAutoInc(prev => ({
+        ...prev,
+        targetField: newCols[index].name,
+        generatorName: `GEN_${currentTableName}_${newCols[index].name}`
+      }));
     }
 
     setColumns(newCols);
@@ -439,9 +543,14 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
                 }`}>
                   {isEditMode ? 'Modo Alter' : 'Modo Create'}
                 </span>
+                {autoInc.enabled && (
+                  <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
+                    <Zap className="w-3 h-3 fill-current" /> Auto-Inc PK
+                  </span>
+                )}
               </div>
               <p className="text-xs text-zinc-400">
-                Agrega, renombra, reordena campos y modifica tipos de datos en Firebird
+                Campos, reordenamiento, clave primaria y generador/trigger automático en Firebird
               </p>
             </div>
           </div>
@@ -458,8 +567,21 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
                 }`}
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>Campos</span>
+                <span>Campos ({columns.length})</span>
               </button>
+
+              <button
+                onClick={() => setActiveTab('autoinc')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
+                  activeTab === 'autoinc' 
+                    ? 'bg-zinc-800 text-amber-400 font-medium shadow-xs' 
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Generador & Trigger {autoInc.enabled ? '✓' : ''}</span>
+              </button>
+
               <button
                 onClick={() => setActiveTab('sql')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
@@ -498,10 +620,14 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <span>{columns.length} campos</span>
+          <div className="flex items-center gap-3 text-xs">
+            {autoInc.enabled && (
+              <span className="text-amber-400 flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 fill-current" /> Auto-Inc: {autoInc.targetField}
+              </span>
+            )}
             {deletedColumns.length > 0 && (
-              <span className="text-red-400">({deletedColumns.length} a eliminar)</span>
+              <span className="text-red-400">({deletedColumns.length} campos a eliminar)</span>
             )}
           </div>
         </div>
@@ -532,6 +658,7 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
                 {columns.map((col, index) => {
                   const typeMeta = FIREBIRD_DATA_TYPES.find(t => t.value === col.type);
                   const isRenamed = !col.isNew && col.originalName && col.originalName !== col.name;
+                  const isAutoIncField = autoInc.enabled && autoInc.targetField === col.name;
 
                   return (
                     <div 
@@ -574,19 +701,30 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
                       {/* Field Name */}
                       <div className="col-span-3">
                         <div className="relative">
-                          <input
-                            type="text"
-                            value={col.name}
-                            onChange={(e) => handleColumnChange(index, 'name', e.target.value.toUpperCase())}
-                            className={`w-full bg-zinc-950 border rounded px-2 py-1 text-xs font-mono font-medium focus:outline-none transition-colors ${
-                              isRenamed 
-                                ? 'border-amber-500 text-amber-300' 
-                                : col.isNew 
-                                ? 'border-emerald-500/50 text-emerald-300' 
-                                : 'border-zinc-700 text-zinc-100 focus:border-amber-500'
-                            }`}
-                            placeholder="NOMBRE_CAMPO"
-                          />
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={col.name}
+                              onChange={(e) => handleColumnChange(index, 'name', e.target.value.toUpperCase())}
+                              className={`flex-1 bg-zinc-950 border rounded px-2 py-1 text-xs font-mono font-medium focus:outline-none transition-colors ${
+                                isRenamed 
+                                  ? 'border-amber-500 text-amber-300' 
+                                  : col.isNew 
+                                  ? 'border-emerald-500/50 text-emerald-300' 
+                                  : 'border-zinc-700 text-zinc-100 focus:border-amber-500'
+                              }`}
+                              placeholder="NOMBRE_CAMPO"
+                            />
+                            {isAutoIncField && (
+                              <span 
+                                title="Campo con Generador y Trigger Auto-incremental asociado" 
+                                className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded text-[10px] font-bold flex items-center shrink-0 cursor-pointer"
+                                onClick={() => setActiveTab('autoinc')}
+                              >
+                                ⚡ Auto
+                              </span>
+                            )}
+                          </div>
                           {isRenamed && (
                             <span className="text-[10px] text-zinc-500 block truncate mt-0.5 font-mono">
                               orig: {col.originalName}
@@ -708,24 +846,216 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
                 </button>
 
                 <div className="text-[11px] text-zinc-500 flex items-center gap-3">
-                  <span className="flex items-center gap-1">
-                    <ArrowUp className="w-3 h-3 text-amber-400" />
-                    <ArrowDown className="w-3 h-3 text-amber-400" /> Reordenar campos
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('autoinc')}
+                    className="flex items-center gap-1 text-amber-400 hover:underline"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    <span>Configurar Generador / Auto-inc</span>
+                  </button>
                   <span>•</span>
                   <span>Usa ALTER COLUMN POSITION nativo</span>
                 </div>
               </div>
+            </div>
+          ) : activeTab === 'autoinc' ? (
+            /* Auto-Increment (Generator & Trigger) Configuration Tab */
+            <div className="flex-1 p-6 overflow-y-auto space-y-6">
+              
+              {/* Enable Switch Banner */}
+              <div className="p-4 bg-zinc-950/80 border border-zinc-800 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/20">
+                    <Zap className="w-5 h-5 fill-current" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-100">
+                      Auto-incremento para Clave Primaria (Generador + Trigger)
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Crea automáticamente un Generador/Secuencia y un Trigger BEFORE INSERT para autoincrementar el ID.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoInc.enabled}
+                    onChange={(e) => setAutoInc({ ...autoInc, enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                </label>
+              </div>
+
+              {autoInc.enabled ? (
+                <div className="grid grid-cols-2 gap-6 animate-in fade-in duration-150">
+                  
+                  {/* Left Column: Target field & Generator settings */}
+                  <div className="space-y-4 bg-zinc-950/40 p-4 border border-zinc-800/80 rounded-xl">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
+                      <Key className="w-3.5 h-3.5" /> 1. Campo y Generador
+                    </div>
+
+                    {/* Target Field Selector */}
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1">
+                        Campo a autoincrementar (PK):
+                      </label>
+                      <select
+                        value={autoInc.targetField}
+                        onChange={(e) => {
+                          const field = e.target.value;
+                          setAutoInc({
+                            ...autoInc,
+                            targetField: field,
+                            generatorName: `GEN_${currentTableName}_${field}`
+                          });
+                        }}
+                        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 focus:outline-none focus:border-amber-500"
+                      >
+                        {columns.map(c => (
+                          <option key={c.id} value={c.name}>
+                            {c.name} ({c.type}) {c.isPrimaryKey ? '★ [PK]' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Generator Source Radio */}
+                    <div className="space-y-2 pt-2 border-t border-zinc-800 text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer text-zinc-200">
+                        <input
+                          type="radio"
+                          name="genOption"
+                          checked={autoInc.createGenerator}
+                          onChange={() => setAutoInc({ ...autoInc, createGenerator: true })}
+                          className="text-amber-500 bg-zinc-950 border-zinc-700 focus:ring-amber-500"
+                        />
+                        <span>Crear nuevo Generador / Secuencia</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-zinc-200">
+                        <input
+                          type="radio"
+                          name="genOption"
+                          checked={!autoInc.createGenerator}
+                          onChange={() => setAutoInc({ ...autoInc, createGenerator: false })}
+                          className="text-amber-500 bg-zinc-950 border-zinc-700 focus:ring-amber-500"
+                        />
+                        <span>Usar Generador existente de la Base de Datos</span>
+                      </label>
+                    </div>
+
+                    {/* Generator Name Input or Dropdown */}
+                    {autoInc.createGenerator ? (
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-300 mb-1">
+                          Nombre del Nuevo Generador:
+                        </label>
+                        <input
+                          type="text"
+                          value={autoInc.generatorName}
+                          onChange={(e) => setAutoInc({ ...autoInc, generatorName: e.target.value.toUpperCase() })}
+                          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-300 uppercase focus:outline-none focus:border-amber-500"
+                          placeholder="GEN_TABLA_ID"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-300 mb-1">
+                          Seleccionar Generador Existente:
+                        </label>
+                        <select
+                          value={autoInc.existingGenerator}
+                          onChange={(e) => setAutoInc({ ...autoInc, existingGenerator: e.target.value })}
+                          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500"
+                        >
+                          {existingGenerators.length === 0 ? (
+                            <option value="">(No hay generadores existentes)</option>
+                          ) : (
+                            existingGenerators.map(g => (
+                              <option key={g} value={g}>{g}</option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Start Value */}
+                    {autoInc.createGenerator && (
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-300 mb-1">
+                          Valor Inicial del Contador:
+                        </label>
+                        <input
+                          type="number"
+                          value={autoInc.startValue}
+                          onChange={(e) => setAutoInc({ ...autoInc, startValue: parseInt(e.target.value) || 1 })}
+                          className="w-28 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-100 focus:outline-none focus:border-amber-500"
+                          min="1"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Column: Trigger Settings & Live Preview */}
+                  <div className="space-y-4 bg-zinc-950/40 p-4 border border-zinc-800/80 rounded-xl flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4">
+                        <Layers className="w-3.5 h-3.5" /> 2. Trigger BEFORE INSERT
+                      </div>
+
+                      <div className="mb-3">
+                        <label className="block text-xs font-medium text-zinc-300 mb-1">
+                          Nombre del Trigger:
+                        </label>
+                        <input
+                          type="text"
+                          value={autoInc.triggerName}
+                          onChange={(e) => setAutoInc({ ...autoInc, triggerName: e.target.value.toUpperCase() })}
+                          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-300 uppercase focus:outline-none focus:border-amber-500"
+                          placeholder="TR_TABLA_BI"
+                        />
+                      </div>
+
+                      <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-lg font-mono text-[11px] text-zinc-400 space-y-1">
+                        <div className="text-zinc-500 font-sans text-[10px] uppercase font-semibold">Lógica que se creará:</div>
+                        <div className="text-amber-300/80">IF (NEW.{autoInc.targetField || 'ID'} IS NULL OR NEW.{autoInc.targetField || 'ID'} = 0) THEN</div>
+                        <div className="pl-4 text-emerald-400">
+                          NEW.{autoInc.targetField || 'ID'} = GEN_ID({autoInc.createGenerator ? autoInc.generatorName : autoInc.existingGenerator}, 1);
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-zinc-500 bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800">
+                      💡 Esta convención estándar de Firebird permite insertar filas sin especificar el ID (se generará solo), o especificar un ID manual si es necesario (ej. migración de datos).
+                    </div>
+                  </div>
+
+                </div>
+              ) : (
+                <div className="p-12 text-center text-zinc-500">
+                  <Zap className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p className="text-sm font-medium text-zinc-400 mb-1">Auto-incremento desactivado</p>
+                  <p className="text-xs max-w-sm mx-auto">
+                    Activa la casilla superior para que Firebird genere automáticamente los valores de clave primaria al insertar filas.
+                  </p>
+                </div>
+              )}
+
             </div>
           ) : (
             /* SQL DDL Preview Tab */
             <div className="flex-1 flex flex-col p-6 overflow-hidden">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Script DDL Generado para Firebird:
+                  Script DDL Completo (Tabla + Generador + Trigger):
                 </span>
                 <span className="text-[11px] text-zinc-500">
-                  {isEditMode ? 'Sentencias ALTER TABLE' : 'Sentencia CREATE TABLE'}
+                  {isEditMode ? 'Sentencias ALTER TABLE / Triggers' : 'CREATE TABLE + SEQUENCE + TRIGGER'}
                 </span>
               </div>
               <textarea
@@ -777,7 +1107,7 @@ export const TableDesignerModal: React.FC<TableDesignerModalProps> = ({
                 ? 'Aplicando cambios DDL...' 
                 : isEditMode 
                 ? 'Aplicar Cambios a la Tabla' 
-                : 'Crear Tabla'}
+                : 'Crear Tabla con Auto-inc'}
             </button>
           </div>
         </div>

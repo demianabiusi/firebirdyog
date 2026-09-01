@@ -200,18 +200,8 @@ ipcMain.handle('fb:execute-query', async (_, sql: string, maxRows?: number) => {
 
 ipcMain.handle('fb:execute-script', async (_, script: string) => {
   try {
-    // Split script by semicolons (simple parser)
-    const statements = script
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-
-    const results = [];
-    for (const stmt of statements) {
-      const res = await firebirdService.executeQuery(stmt);
-      results.push(res);
-    }
-    return { success: true, data: { statementsExecuted: statements.length, results } };
+    const data = await firebirdService.executeScript(script);
+    return { success: true, data };
   } catch (err: any) {
     return { success: false, error: err.message || 'Error al ejecutar script' };
   }

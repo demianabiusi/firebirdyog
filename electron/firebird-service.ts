@@ -275,6 +275,104 @@ export class FirebirdService {
     });
   }
 
+  public splitSqlStatements(script: string): string[] {
+    const cleaned = this.cleanSqlForExecution(script);
+    const statements: string[] = [];
+    let current = '';
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inBlockComment = false;
+    let inLineComment = false;
+    let beginDepth = 0;
+
+    for (let i = 0; i < cleaned.length; i++) {
+      const char = cleaned[i];
+      const nextChar = cleaned[i + 1] || '';
+
+      // Line comment
+      if (!inSingleQuote && !inDoubleQuote && !inBlockComment && char === '-' && nextChar === '-') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+      if (inLineComment) {
+        if (char === '\n') inLineComment = false;
+        continue;
+      }
+
+      // Block comment
+      if (!inSingleQuote && !inDoubleQuote && !inLineComment && char === '/' && nextChar === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+      if (inBlockComment) {
+        if (char === '*' && nextChar === '/') {
+          inBlockComment = false;
+          i++;
+        }
+        continue;
+      }
+
+      // Quotes
+      if (char === "'" && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+        current += char;
+        continue;
+      }
+      if (char === '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+        current += char;
+        continue;
+      }
+
+      if (!inSingleQuote && !inDoubleQuote) {
+        // Detect BEGIN and END keywords for procedures/triggers
+        const remaining = cleaned.slice(i).toUpperCase();
+        if (/^\bBEGIN\b/.test(remaining)) {
+          beginDepth++;
+        } else if (/^\bEND\b/.test(remaining)) {
+          if (beginDepth > 0) beginDepth--;
+        }
+
+        // Semicolon delimiter
+        if (char === ';') {
+          if (beginDepth === 0) {
+            if (current.trim()) {
+              statements.push(current.trim());
+            }
+            current = '';
+            continue;
+          }
+        }
+      }
+
+      current += char;
+    }
+
+    if (current.trim()) {
+      statements.push(current.trim());
+    }
+
+    return statements;
+  }
+
+  public async executeScript(script: string): Promise<{ statementsExecuted: number; results: any[] }> {
+    const statements = this.splitSqlStatements(script);
+    const results: any[] = [];
+
+    for (const stmt of statements) {
+      if (!stmt.trim()) continue;
+      const res = await this.executeQuery(stmt);
+      results.push(res);
+    }
+
+    return {
+      statementsExecuted: results.length,
+      results
+    };
+  }
+
   private extractString(row: any, ...keys: string[]): string {
     if (!row || typeof row !== 'object') return '';
     for (const key of keys) {
