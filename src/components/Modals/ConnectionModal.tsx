@@ -56,6 +56,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   onConnect,
   savedConnections,
   onRefreshConnections,
+  onOpenCreateModal,
   activeConfigId
 }) => {
   const [selectedConfig, setSelectedConfig] = useState<ConnectionConfig>(DEFAULT_CONFIG);
