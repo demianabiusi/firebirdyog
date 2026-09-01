@@ -9,7 +9,8 @@ import {
   HelpCircle,
   CheckCircle2,
   AlertCircle,
-  Download
+  Download,
+  Upload
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -18,6 +19,7 @@ interface NavbarProps {
   onOpenConnectionModal: () => void;
   onOpenCreateDbModal: () => void;
   onOpenDumpModal?: () => void;
+  onOpenImportModal?: () => void;
   onDisconnect: () => void;
   onNewQuery: () => void;
 }
@@ -28,6 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenConnectionModal,
   onOpenCreateDbModal,
   onOpenDumpModal,
+  onOpenImportModal,
   onDisconnect,
   onNewQuery
 }) => {
@@ -70,7 +73,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Exportar Base de Datos / Dump SQL completo (mysqldump)"
           >
             <Download className="w-3.5 h-3.5 text-amber-400" />
-            <span>Dump / Exportar BD</span>
+            <span>Exportar Dump</span>
+          </button>
+        )}
+
+        {/* Import Dump Action */}
+        {isConnected && onOpenImportModal && (
+          <button
+            onClick={onOpenImportModal}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-blue-300 hover:text-blue-200 text-xs rounded border border-zinc-800 hover:border-blue-500/30 transition-colors"
+            title="Importar archivo Dump / Script SQL de cualquier tamaño"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-400" />
+            <span>Importar SQL</span>
           </button>
         )}
       </div>

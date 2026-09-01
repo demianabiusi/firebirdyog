@@ -32,5 +32,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on('fb:dump-progress', handler);
     return () => ipcRenderer.removeListener('fb:dump-progress', handler);
+  },
+
+  selectImportFile: () => ipcRenderer.invoke('dialog:select-import-file'),
+  startImport: (options: any) => ipcRenderer.invoke('fb:start-import', options),
+  cancelImport: () => ipcRenderer.invoke('fb:cancel-import'),
+  onImportProgress: (callback: (progress: any) => void) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on('fb:import-progress', handler);
+    return () => ipcRenderer.removeListener('fb:import-progress', handler);
   }
 });

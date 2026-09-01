@@ -128,6 +128,12 @@ export interface ElectronAPI {
   cancelDump: () => Promise<{ success: boolean }>;
   showItemInFolder: (path: string) => Promise<boolean>;
   onDumpProgress: (callback: (progress: DumpProgress) => void) => () => void;
+
+  // Database Import / Streaming Dump Loader
+  selectImportFile: () => Promise<{ filePath: string; size: number; name: string } | null>;
+  startImport: (options: ImportOptions) => Promise<IpcResponse<ImportResult>>;
+  cancelImport: () => Promise<{ success: boolean }>;
+  onImportProgress: (callback: (progress: ImportProgress) => void) => () => void;
 }
 
 export interface DumpOptions {
@@ -152,6 +158,37 @@ export interface DumpProgress {
   totalRowsInTable?: number;
   percentage: number;
   message: string;
+}
+
+export interface ImportOptions {
+  filePath: string;
+  stopOnError: boolean;
+}
+
+export interface ImportErrorItem {
+  statementIndex: number;
+  statementSnippet: string;
+  error: string;
+  lineNumber: number;
+}
+
+export interface ImportProgress {
+  bytesProcessed: number;
+  totalBytes: number;
+  percentage: number;
+  statementsExecuted: number;
+  errorsCount: number;
+  currentStatementSnippet: string;
+  message: string;
+}
+
+export interface ImportResult {
+  success: boolean;
+  totalStatements: number;
+  executedStatements: number;
+  errorsCount: number;
+  errors: ImportErrorItem[];
+  durationMs: number;
 }
 
 declare global {

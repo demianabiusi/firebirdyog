@@ -329,3 +329,39 @@ ipcMain.handle('shell:show-item-in-folder', async (_, fullPath: string) => {
   return false;
 });
 
+// IPC: Database Import / Streaming Dump Loader
+ipcMain.handle('fb:start-import', async (_, options: any) => {
+  try {
+    const res = await dumpService.importDatabase(options, (progress: any) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('fb:import-progress', progress);
+      }
+    });
+    return { success: true, data: res };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al importar base de datos' };
+  }
+});
+
+ipcMain.handle('fb:cancel-import', async () => {
+  dumpService.cancel();
+  return { success: true };
+});
+
+ipcMain.handle('dialog:select-import-file', async () => {
+  if (!mainWindow) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Seleccionar archivo de Dump SQL para importar (.sql)',
+    properties: ['openFile'],
+    filters: [
+      { name: 'SQL Script (*.sql)', extensions: ['sql'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  if (canceled || filePaths.length === 0) return null;
+  const filePath = filePaths[0];
+  const stat = fs.statSync(filePath);
+  return { filePath, size: stat.size, name: path.basename(filePath) };
+});
+
+

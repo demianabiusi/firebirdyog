@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as readline from 'readline';
 import { FirebirdService } from './firebird-service';
 
 export interface DumpOptions {
@@ -24,6 +25,37 @@ export interface DumpProgress {
   totalRowsInTable?: number;
   percentage: number;
   message: string;
+}
+
+export interface ImportOptions {
+  filePath: string;
+  stopOnError: boolean;
+}
+
+export interface ImportErrorItem {
+  statementIndex: number;
+  statementSnippet: string;
+  error: string;
+  lineNumber: number;
+}
+
+export interface ImportProgress {
+  bytesProcessed: number;
+  totalBytes: number;
+  percentage: number;
+  statementsExecuted: number;
+  errorsCount: number;
+  currentStatementSnippet: string;
+  message: string;
+}
+
+export interface ImportResult {
+  success: boolean;
+  totalStatements: number;
+  executedStatements: number;
+  errorsCount: number;
+  errors: ImportErrorItem[];
+  durationMs: number;
 }
 
 export class DumpService {
@@ -579,6 +611,209 @@ export class DumpService {
       };
     } finally {
       writeStream.end();
+    }
+  }
+
+  public async importDatabase(
+    options: ImportOptions,
+    onProgress: (p: ImportProgress) => void
+  ): Promise<ImportResult> {
+    this.isCancelled = false;
+    const startTime = Date.now();
+
+    const stat = fs.statSync(options.filePath);
+    const totalBytes = stat.size;
+    let bytesProcessed = 0;
+
+    const fileStream = fs.createReadStream(options.filePath, { encoding: 'utf-8' });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity
+    });
+
+    let currentStatement = '';
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inBlockComment = false;
+    let beginDepth = 0;
+    let currentDelimiter = ';';
+
+    let totalStatements = 0;
+    let executedStatements = 0;
+    let errorsCount = 0;
+    const errors: ImportErrorItem[] = [];
+    let lineNumber = 0;
+    let lastProgressTime = 0;
+
+    try {
+      for await (const line of rl) {
+        if (this.isCancelled) {
+          fileStream.destroy();
+          throw new Error('Importación cancelada por el usuario.');
+        }
+
+        lineNumber++;
+        bytesProcessed += Buffer.byteLength(line, 'utf-8') + 1;
+
+        const trimmedLine = line.trim();
+
+        // Check SET TERM directives (e.g. SET TERM ^ ;)
+        const setTermMatch = trimmedLine.match(/^SET\s+TERM\s+(\S+)/i);
+        if (setTermMatch && !inSingleQuote && !inDoubleQuote && !inBlockComment) {
+          currentDelimiter = setTermMatch[1];
+          continue;
+        }
+
+        // Ignore client commands like SET NAMES, SET SQL DIALECT
+        if (/^SET\s+(NAMES|SQL\s+DIALECT)/i.test(trimmedLine) && !inSingleQuote && !inDoubleQuote && !inBlockComment) {
+          continue;
+        }
+
+        let i = 0;
+        while (i < line.length) {
+          const char = line[i];
+          const nextChar = line[i + 1] || '';
+
+          // Block comment
+          if (!inSingleQuote && !inDoubleQuote && char === '/' && nextChar === '*') {
+            inBlockComment = true;
+            i += 2;
+            continue;
+          }
+          if (inBlockComment) {
+            if (char === '*' && nextChar === '/') {
+              inBlockComment = false;
+              i += 2;
+              continue;
+            }
+            i++;
+            continue;
+          }
+
+          // Line comment (-- ...)
+          if (!inSingleQuote && !inDoubleQuote && char === '-' && nextChar === '-') {
+            break;
+          }
+
+          // Single quotes
+          if (char === "'" && !inDoubleQuote) {
+            inSingleQuote = !inSingleQuote;
+            currentStatement += char;
+            i++;
+            continue;
+          }
+
+          // Double quotes (identifiers)
+          if (char === '"' && !inSingleQuote) {
+            inDoubleQuote = !inDoubleQuote;
+            currentStatement += char;
+            i++;
+            continue;
+          }
+
+          if (!inSingleQuote && !inDoubleQuote) {
+            const remaining = line.slice(i).toUpperCase();
+            if (/^\bBEGIN\b/.test(remaining)) {
+              beginDepth++;
+            } else if (/^\bEND\b/.test(remaining)) {
+              if (beginDepth > 0) beginDepth--;
+            }
+
+            // Check if current delimiter is matched
+            if (line.startsWith(currentDelimiter, i) && (beginDepth === 0 || currentDelimiter !== ';')) {
+              const stmtToRun = currentStatement.trim();
+              currentStatement = '';
+              i += currentDelimiter.length;
+
+              if (stmtToRun) {
+                totalStatements++;
+                try {
+                  await this.firebirdService.executeQuery(stmtToRun);
+                  executedStatements++;
+                } catch (err: any) {
+                  errorsCount++;
+                  const errMsg = err.message || String(err);
+                  errors.push({
+                    statementIndex: totalStatements,
+                    statementSnippet: stmtToRun.length > 100 ? stmtToRun.slice(0, 100) + '...' : stmtToRun,
+                    error: errMsg,
+                    lineNumber
+                  });
+
+                  if (options.stopOnError) {
+                    fileStream.destroy();
+                    throw new Error(`Error en línea ${lineNumber}: ${errMsg}\n\nSentencia:\n${stmtToRun}`);
+                  }
+                }
+
+                // Throttle progress updates to at most once per 60ms
+                const now = Date.now();
+                if (now - lastProgressTime > 60 || bytesProcessed >= totalBytes) {
+                  lastProgressTime = now;
+                  const pct = Math.min(99, Math.round((bytesProcessed / Math.max(1, totalBytes)) * 100));
+                  onProgress({
+                    bytesProcessed,
+                    totalBytes,
+                    percentage: pct,
+                    statementsExecuted: executedStatements,
+                    errorsCount,
+                    currentStatementSnippet: stmtToRun.slice(0, 80),
+                    message: `Importando... (${executedStatements} sentencias ejecutadas${errorsCount > 0 ? `, ${errorsCount} errores` : ''})`
+                  });
+                }
+              }
+              continue;
+            }
+          }
+
+          currentStatement += char;
+          i++;
+        }
+
+        currentStatement += '\n';
+      }
+
+      // If there is any trailing statement
+      if (currentStatement.trim()) {
+        const stmtToRun = currentStatement.trim();
+        totalStatements++;
+        try {
+          await this.firebirdService.executeQuery(stmtToRun);
+          executedStatements++;
+        } catch (err: any) {
+          errorsCount++;
+          errors.push({
+            statementIndex: totalStatements,
+            statementSnippet: stmtToRun.slice(0, 100),
+            error: err.message || String(err),
+            lineNumber
+          });
+          if (options.stopOnError) {
+            throw err;
+          }
+        }
+      }
+
+      onProgress({
+        bytesProcessed: totalBytes,
+        totalBytes,
+        percentage: 100,
+        statementsExecuted: executedStatements,
+        errorsCount,
+        currentStatementSnippet: '',
+        message: `¡Importación completada! (${executedStatements} sentencias ejecutadas${errorsCount > 0 ? `, ${errorsCount} errores` : ''})`
+      });
+
+      return {
+        success: errorsCount === 0 || !options.stopOnError,
+        totalStatements,
+        executedStatements,
+        errorsCount,
+        errors,
+        durationMs: Date.now() - startTime
+      };
+    } finally {
+      fileStream.destroy();
     }
   }
 }
