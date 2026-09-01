@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeImage, NativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { FirebirdService } from './firebird-service';
@@ -10,15 +10,40 @@ let mainWindow: BrowserWindow | null = null;
 const firebirdService = new FirebirdService();
 const storageService = new StorageService();
 
+function getAppIcon(): NativeImage | string | undefined {
+  const possiblePaths = [
+    path.join(__dirname, '../public/icon.png'),
+    path.join(process.cwd(), 'public/icon.png'),
+    path.join(app.getAppPath(), 'public/icon.png'),
+    path.join(__dirname, '../public/icon.svg'),
+    path.join(process.cwd(), 'public/icon.svg')
+  ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        const img = nativeImage.createFromPath(p);
+        if (!img.isEmpty()) {
+          return img;
+        }
+      } catch {
+        return p;
+      }
+    }
+  }
+  return undefined;
+}
+
 function createWindow() {
-  const iconPath = path.join(__dirname, '../public/icon.svg');
+  const appIcon = getAppIcon();
+
   mainWindow = new BrowserWindow({
     width: 1300,
     height: 850,
     minWidth: 900,
     minHeight: 600,
     title: 'FirebirdYog - Firebird Database Client',
-    icon: fs.existsSync(iconPath) ? iconPath : undefined,
+    icon: appIcon,
     backgroundColor: '#09090b',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -27,6 +52,10 @@ function createWindow() {
       sandbox: false
     }
   });
+
+  if (appIcon && typeof appIcon !== 'string') {
+    mainWindow.setIcon(appIcon);
+  }
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -41,6 +70,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  app.setName('FirebirdYog');
   createWindow();
 
   app.on('activate', () => {
