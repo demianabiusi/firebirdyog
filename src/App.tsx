@@ -53,6 +53,19 @@ export const App: React.FC = () => {
   const [activeTabId, setActiveTabId] = useState<string>('tab_1');
   const [maxRows, setMaxRows] = useState<number>(1000);
 
+  // Panel resizing states
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('firebirdyog_sidebar_width');
+    return saved ? Math.max(180, Math.min(650, parseInt(saved, 10))) : 288;
+  });
+  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
+
+  const [editorHeightPercent, setEditorHeightPercent] = useState<number>(() => {
+    const saved = localStorage.getItem('firebirdyog_editor_height_pct');
+    return saved ? Math.max(15, Math.min(85, parseFloat(saved))) : 48;
+  });
+  const [isDraggingEditor, setIsDraggingEditor] = useState(false);
+
   // History
   const [history, setHistory] = useState<QueryHistoryItem[]>([]);
 
@@ -414,6 +427,67 @@ END;
     handleOpenInSqlEditor(template, 'Nuevo Trigger');
   };
 
+  // Sidebar horizontal resize
+  const handleSidebarMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingSidebar(true);
+
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(180, Math.min(window.innerWidth * 0.55, startWidth + delta));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingSidebar(false);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      setSidebarWidth(current => {
+        localStorage.setItem('firebirdyog_sidebar_width', String(Math.round(current)));
+        return current;
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Editor vertical resize
+  const handleEditorMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingEditor(true);
+
+    const container = document.getElementById('right-pane-container');
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const containerHeight = containerRect.height;
+    const containerTop = containerRect.top;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const offsetY = moveEvent.clientY - containerTop;
+      const pct = (offsetY / containerHeight) * 100;
+      const clampedPct = Math.max(15, Math.min(85, pct));
+      setEditorHeightPercent(clampedPct);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingEditor(false);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      setEditorHeightPercent(current => {
+        localStorage.setItem('firebirdyog_editor_height_pct', String(Math.round(current)));
+        return current;
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   // Handle database creation callback
   const handleCreateAndConnect = async (config: ConnectionConfig, autoConnect: boolean, autoSave: boolean) => {
     if (autoSave) {
@@ -426,8 +500,13 @@ END;
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans select-none">
+    <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans select-none relative">
       
+      {/* Invisible overlay during drag to prevent iframe / Monaco event stealing */}
+      {(isDraggingSidebar || isDraggingEditor) && (
+        <div className={`fixed inset-0 z-50 ${isDraggingSidebar ? 'cursor-col-resize' : 'cursor-row-resize'}`} />
+      )}
+
       {/* Top Navbar */}
       <Navbar
         isConnected={isConnected}
@@ -441,8 +520,11 @@ END;
       {/* Main Workspace Layout */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Left Pane: Database Object Tree (260px - 300px) */}
-        <div className="w-72 shrink-0 h-full border-r border-zinc-800 bg-zinc-900 flex flex-col">
+        {/* Left Pane: Database Object Tree (Resizable Width) */}
+        <div 
+          style={{ width: `${sidebarWidth}px` }} 
+          className="shrink-0 h-full bg-zinc-900 flex flex-col overflow-hidden"
+        >
           {isConnected ? (
             <ObjectTree
               objects={schemaObjects}
@@ -489,8 +571,26 @@ END;
           )}
         </div>
 
+        {/* Horizontal Resizer Splitter (Sidebar <-> Main Pane) */}
+        <div
+          onMouseDown={handleSidebarMouseDown}
+          onDoubleClick={() => {
+            setSidebarWidth(288);
+            localStorage.setItem('firebirdyog_sidebar_width', '288');
+          }}
+          title="Arrastra para cambiar ancho del panel (Doble clic para restablecer a 288px)"
+          className={`w-1 hover:w-1.5 bg-zinc-800 hover:bg-amber-500 cursor-col-resize transition-all shrink-0 select-none relative group z-10 ${
+            isDraggingSidebar ? 'w-1.5 bg-amber-500' : ''
+          }`}
+        >
+          <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+        </div>
+
         {/* Right Pane: Split (Top = SQL Editor, Bottom = Grid / Output) */}
-        <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-950">
+        <div 
+          id="right-pane-container"
+          className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-950"
+        >
           
           {/* Query Tab Bar */}
           <TabBar
@@ -502,8 +602,11 @@ END;
             onRenameTab={handleRenameTab}
           />
 
-          {/* Top Half: SQL Editor */}
-          <div className="h-[48%] min-h-[160px] border-b border-zinc-800 flex flex-col">
+          {/* Top Half: SQL Editor (Resizable Height) */}
+          <div 
+            style={{ height: `${editorHeightPercent}%` }} 
+            className="min-h-[100px] flex flex-col overflow-hidden"
+          >
             <SqlEditor
               sql={activeTab.sql}
               onChange={handleSqlChange}
@@ -514,8 +617,24 @@ END;
             />
           </div>
 
+          {/* Vertical Resizer Splitter (SQL Editor <-> Output Panel) */}
+          <div
+            onMouseDown={handleEditorMouseDown}
+            onDoubleClick={() => {
+              setEditorHeightPercent(48);
+              localStorage.setItem('firebirdyog_editor_height_pct', '48');
+            }}
+            title="Arrastra para cambiar altura del editor y resultados (Doble clic para restablecer a 48%)"
+            className={`h-1.5 hover:h-2 bg-zinc-800/90 hover:bg-amber-500 cursor-row-resize transition-all shrink-0 select-none relative flex items-center justify-center group z-10 ${
+              isDraggingEditor ? 'h-2 bg-amber-500' : ''
+            }`}
+          >
+            <div className="w-10 h-0.5 bg-zinc-600 group-hover:bg-amber-200 rounded-full" />
+            <div className="absolute -top-1 -bottom-1 inset-x-0 cursor-row-resize" />
+          </div>
+
           {/* Bottom Half: Data Grid & Output Panel */}
-          <div className="flex-1 min-h-[180px] flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-[120px] flex flex-col overflow-hidden">
             <OutputPanel
               result={activeTab.result}
               isRunning={activeTab.isRunning}
