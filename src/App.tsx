@@ -96,10 +96,13 @@ export const App: React.FC = () => {
         const res = await window.electronAPI.getSchemaObjects();
         if (res.success && res.data) {
           setSchemaObjects(res.data);
+        } else {
+          setSchemaObjects(null);
         }
       }
     } catch (err) {
       console.error('Error fetching schema:', err);
+      setSchemaObjects(null);
     } finally {
       setIsLoadingSchema(false);
     }
@@ -110,22 +113,37 @@ export const App: React.FC = () => {
   }, [loadSavedConnections]);
 
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && activeConfig) {
       refreshSchema();
     } else {
       setSchemaObjects(null);
     }
-  }, [isConnected, refreshSchema]);
+  }, [isConnected, activeConfig, refreshSchema]);
 
   // Connect action
   const handleConnect = async (config: ConnectionConfig) => {
     if (window.electronAPI?.connect) {
+      setSchemaObjects(null);
+      setIsLoadingSchema(true);
       const res = await window.electronAPI.connect(config);
       if (!res.success) {
+        setIsLoadingSchema(false);
         throw new Error(res.error || 'No se pudo establecer la conexión');
       }
       setActiveConfig(config);
       setIsConnected(true);
+
+      // Force instant schema retrieval for the new connection
+      try {
+        const schemaRes = await window.electronAPI.getSchemaObjects();
+        if (schemaRes.success && schemaRes.data) {
+          setSchemaObjects(schemaRes.data);
+        }
+      } catch (err) {
+        console.error('Error fetching schema after connection change:', err);
+      } finally {
+        setIsLoadingSchema(false);
+      }
     }
   };
 
@@ -494,8 +512,7 @@ END;
       loadSavedConnections();
     }
     if (autoConnect) {
-      setActiveConfig(config);
-      setIsConnected(true);
+      await handleConnect(config);
     }
   };
 
