@@ -11,12 +11,14 @@ const firebirdService = new FirebirdService();
 const storageService = new StorageService();
 
 function createWindow() {
+  const iconPath = path.join(__dirname, '../public/icon.svg');
   mainWindow = new BrowserWindow({
     width: 1300,
     height: 850,
     minWidth: 900,
     minHeight: 600,
     title: 'FirebirdYog - Firebird Database Client',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     backgroundColor: '#09090b',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

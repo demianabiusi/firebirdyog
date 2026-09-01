@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#09090b"/>
+    </radialGradient>
+
+    <!-- Outer Flame / Wings Gradient -->
+    <linearGradient id="fireOuter" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="40%" stop-color="#ea580c"/>
+      <stop offset="75%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fef08a"/>
+    </linearGradient>
+
+    <!-- Left Wing Gradient -->
+    <linearGradient id="wingLeft" x1="0%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#991b1b"/>
+      <stop offset="40%" stop-color="#c2410c"/>
+      <stop offset="80%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+
+    <!-- Right Wing Gradient -->
+    <linearGradient id="wingRight" x1="100%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#991b1b"/>
+      <stop offset="40%" stop-color="#c2410c"/>
+      <stop offset="80%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+
+    <!-- Core Glow Gradient -->
+    <linearGradient id="fireCore" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="90%" stop-color="#fef08a"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+
+    <!-- Database Cylinder Gradient -->
+    <linearGradient id="dbGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3f3f46"/>
+      <stop offset="50%" stop-color="#71717a"/>
+      <stop offset="100%" stop-color="#27272a"/>
+    </linearGradient>
+
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded App Icon Background Plate -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bgGrad)" stroke="#27272a" stroke-width="6"/>
+  <rect x="22" y="22" width="468" height="468" rx="102" fill="none" stroke="#f59e0b" stroke-width="2" stroke-opacity="0.2"/>
+
+  <!-- Glowing Aura -->
+  <path d="M 256 70 
+           C 310 140, 430 200, 420 320 
+           C 410 410, 310 440, 256 440 
+           C 202 440, 102 410, 92 320 
+           C 82 200, 202 140, 256 70 Z" 
+        fill="#ea580c" opacity="0.15" filter="url(#glow)"/>
+
+  <!-- Left Outer Wing -->
+  <path d="M 256 380 
+           C 210 370, 130 330, 95 245 
+           C 80 205, 85 155, 110 120 
+           C 115 145, 130 170, 150 185 
+           C 135 150, 145 110, 175 80 
+           C 180 105, 195 130, 215 145 
+           C 205 115, 220 85, 256 55 
+           C 245 105, 240 160, 245 220
+           C 230 200, 210 190, 185 195
+           C 200 225, 230 250, 256 265 Z" 
+        fill="url(#wingLeft)"/>
+
+  <!-- Right Outer Wing -->
+  <path d="M 256 380 
+           C 302 370, 382 330, 417 245 
+           C 432 205, 427 155, 402 120 
+           C 397 145, 382 170, 362 185 
+           C 377 150, 367 110, 337 80 
+           C 332 105, 317 130, 297 145 
+           C 307 115, 292 85, 256 55 
+           C 267 105, 272 160, 267 220
+           C 282 200, 302 190, 327 195
+           C 312 225, 282 250, 256 265 Z" 
+        fill="url(#wingRight)"/>
+
+  <!-- Inner Flaming Feathers / Tail -->
+  <path d="M 256 430 
+           C 230 400, 200 350, 205 290 
+           C 220 320, 240 335, 256 340 
+           C 272 335, 292 320, 307 290 
+           C 312 350, 282 400, 256 430 Z" 
+        fill="url(#fireOuter)"/>
+
+  <!-- Central Firebird Body & Head -->
+  <path d="M 256 95 
+           C 265 125, 280 150, 285 180 
+           C 290 220, 280 270, 256 310 
+           C 232 270, 222 220, 227 180 
+           C 232 150, 247 125, 256 95 Z" 
+        fill="url(#fireCore)" filter="url(#glow)"/>
+
+  <!-- Crown / Head Crest -->
+  <path d="M 256 60 
+           C 262 75, 268 90, 265 105 
+           C 260 110, 252 110, 247 105 
+           C 244 90, 250 75, 256 60 Z" 
+        fill="#ffffff"/>
+
+  <!-- Bird Beak / Eye Diamond -->
+  <polygon points="256,115 264,130 256,140 248,130" fill="#ffffff"/>
+
+  <!-- Database Base Rings / Platter Emblem at bottom -->
+  <g transform="translate(196, 380) scale(0.6)">
+    <!-- Base Plate -->
+    <ellipse cx="100" cy="50" rx="90" ry="25" fill="#f59e0b" opacity="0.3"/>
+    <path d="M 10 30 C 10 45, 190 45, 190 30 L 190 45 C 190 60, 10 60, 10 45 Z" fill="#ea580c"/>
+    <ellipse cx="100" cy="30" rx="90" ry="22" fill="#fbbf24"/>
+    <ellipse cx="100" cy="30" rx="75" ry="17" fill="#18181b"/>
+    <ellipse cx="100" cy="30" rx="55" ry="12" fill="#f59e0b"/>
+  </g>
+</svg>
