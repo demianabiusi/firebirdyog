@@ -351,6 +351,69 @@ export const App: React.FC = () => {
     setActiveTabId(newId);
   };
 
+  const handleCreateProcedure = () => {
+    const template = `-- Procedimiento Almacenado de Firebird
+-- Presiona F9 para compilar / ejecutar en la base de datos
+
+CREATE OR ALTER PROCEDURE SP_NUEVO_PROCEDIMIENTO (
+    PARAM_ID INTEGER,
+    PARAM_NOMBRE VARCHAR(100)
+)
+RETURNS (
+    RESULTADO_ID INTEGER,
+    MENSAJE VARCHAR(255)
+)
+AS
+-- Declaración de variables locales
+DECLARE VARIABLE V_CONTADOR INTEGER;
+BEGIN
+    /* Lógica del procedimiento */
+    RESULTADO_ID = :PARAM_ID;
+    MENSAJE = 'Procesado con éxito: ' || COALESCE(:PARAM_NOMBRE, '');
+
+    -- Si el procedimiento es seleccionable (para usar con SELECT * FROM SP_...), descomenta SUSPEND:
+    -- SUSPEND;
+END;
+`;
+    handleOpenInSqlEditor(template, 'Nuevo Procedimiento');
+  };
+
+  const handleCreateView = () => {
+    const template = `-- Vista de Firebird
+-- Presiona F9 para compilar / crear en la base de datos
+
+CREATE OR ALTER VIEW VW_NUEVA_VISTA (
+    CAMPO1,
+    CAMPO2,
+    CAMPO3
+)
+AS
+SELECT 
+    RDB$RELATION_NAME,
+    RDB$FORMAT,
+    RDB$SYSTEM_FLAG
+FROM RDB$RELATIONS
+WHERE RDB$SYSTEM_FLAG = 0;
+`;
+    handleOpenInSqlEditor(template, 'Nueva Vista');
+  };
+
+  const handleCreateTrigger = () => {
+    const template = `-- Trigger de Firebird
+-- Presiona F9 para compilar / crear en la base de datos
+
+CREATE OR ALTER TRIGGER TR_NUEVO_TRIGGER FOR TABLA_OBJETIVO
+ACTIVE BEFORE INSERT POSITION 0
+AS
+BEGIN
+    /* Lógica del trigger */
+    -- IF (NEW.ID IS NULL OR NEW.ID = 0) THEN
+    --     NEW.ID = GEN_ID(GEN_TABLA_ID, 1);
+END;
+`;
+    handleOpenInSqlEditor(template, 'Nuevo Trigger');
+  };
+
   // Handle database creation callback
   const handleCreateAndConnect = async (config: ConnectionConfig, autoConnect: boolean, autoSave: boolean) => {
     if (autoSave) {
@@ -390,6 +453,9 @@ export const App: React.FC = () => {
               onEditObject={handleEditObject}
               onCreateTable={handleOpenCreateTable}
               onDesignTable={handleOpenDesignTable}
+              onCreateProcedure={handleCreateProcedure}
+              onCreateView={handleCreateView}
+              onCreateTrigger={handleCreateTrigger}
               databaseName={activeConfig?.database}
             />
           ) : (

@@ -39,6 +39,9 @@ interface ObjectTreeProps {
   onEditObject: (type: 'PROCEDURE' | 'TRIGGER' | 'VIEW' | 'TABLE', name: string) => void;
   onCreateTable?: () => void;
   onDesignTable?: (tableName: string) => void;
+  onCreateProcedure?: () => void;
+  onCreateView?: () => void;
+  onCreateTrigger?: () => void;
   databaseName?: string;
 }
 
@@ -51,6 +54,9 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
   onEditObject,
   onCreateTable,
   onDesignTable,
+  onCreateProcedure,
+  onCreateView,
+  onCreateTrigger,
   databaseName
 }) => {
   const [searchFilter, setSearchFilter] = useState('');
@@ -291,9 +297,24 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
               <Eye className="w-3.5 h-3.5 text-teal-400" />
               <span>Vistas</span>
             </div>
-            <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-mono">
-              {filteredViews.length}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {onCreateView && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateView();
+                  }}
+                  title="Crear Nueva Vista..."
+                  className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-teal-400 rounded transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              )}
+              <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-mono">
+                {filteredViews.length}
+              </span>
+            </div>
           </div>
 
           {!collapsedSections.views && (
@@ -359,9 +380,24 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
               <Cog className="w-3.5 h-3.5 text-amber-400" />
               <span>Procedimientos</span>
             </div>
-            <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-mono">
-              {filteredProcedures.length}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {onCreateProcedure && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateProcedure();
+                  }}
+                  title="Crear Nuevo Procedimiento Almacenado..."
+                  className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-400 rounded transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              )}
+              <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-mono">
+                {filteredProcedures.length}
+              </span>
+            </div>
           </div>
 
           {!collapsedSections.procedures && (
@@ -444,9 +480,24 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
               <Zap className="w-3.5 h-3.5 text-yellow-400" />
               <span>Triggers</span>
             </div>
-            <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-mono">
-              {filteredTriggers.length}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {onCreateTrigger && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateTrigger();
+                  }}
+                  title="Crear Nuevo Trigger..."
+                  className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-yellow-400 rounded transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              )}
+              <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-mono">
+                {filteredTriggers.length}
+              </span>
+            </div>
           </div>
 
           {!collapsedSections.triggers && (
