@@ -736,7 +736,7 @@ export class FirebirdService {
     const columnsQuery = `
       SELECT 
         TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME,
-        RF.RDB$FIELD_POSITION AS POSITION,
+        RF.RDB$FIELD_POSITION AS FIELD_POS,
         TRIM(F.RDB$FIELD_NAME) AS DOMAIN_NAME,
         F.RDB$FIELD_TYPE AS FIELD_TYPE_CODE,
         F.RDB$FIELD_SUB_TYPE AS FIELD_SUB_TYPE,
@@ -800,40 +800,46 @@ export class FirebirdService {
     ]);
 
     const columns = colRows.map((r) => ({
-      columnName: r.COLUMN_NAME,
-      position: Number(r.POSITION),
-      domainName: r.DOMAIN_NAME,
+      columnName: this.extractString(r, 'COLUMN_NAME'),
+      position: this.extractNumber(r, 'FIELD_POS', 'POSITION'),
+      domainName: this.extractString(r, 'DOMAIN_NAME'),
       fieldType: this.resolveFieldType(
-        Number(r.FIELD_TYPE_CODE),
-        Number(r.FIELD_SUB_TYPE),
-        Number(r.FIELD_LENGTH),
-        Number(r.FIELD_PRECISION),
-        Number(r.FIELD_SCALE)
+        this.extractNumber(r, 'FIELD_TYPE_CODE'),
+        this.extractNumber(r, 'FIELD_SUB_TYPE'),
+        this.extractNumber(r, 'FIELD_LENGTH'),
+        this.extractNumber(r, 'FIELD_PRECISION'),
+        this.extractNumber(r, 'FIELD_SCALE')
       ),
-      length: Number(r.FIELD_LENGTH),
-      precision: Number(r.FIELD_PRECISION),
-      scale: Number(r.FIELD_SCALE),
-      isNullable: Number(r.NULL_FLAG) === 0,
-      defaultValue: r.DEFAULT_VALUE || null,
-      isPrimaryKey: Number(r.IS_PRIMARY_KEY) === 1
+      length: this.extractNumber(r, 'FIELD_LENGTH'),
+      precision: this.extractNumber(r, 'FIELD_PRECISION'),
+      scale: this.extractNumber(r, 'FIELD_SCALE'),
+      isNullable: this.extractNumber(r, 'NULL_FLAG') === 0,
+      defaultValue: this.extractString(r, 'DEFAULT_VALUE') || null,
+      isPrimaryKey: this.extractNumber(r, 'IS_PRIMARY_KEY') === 1
     }));
 
     const triggers = trigRows.map((t) => ({
-      name: t.NAME,
-      type: String(t.TYPE),
-      inactive: Number(t.INACTIVE) === 1
+      name: this.extractString(t, 'NAME'),
+      type: this.extractString(t, 'TYPE'),
+      inactive: this.extractNumber(t, 'INACTIVE') === 1
     }));
 
     const indicesMap = new Map<string, { name: string; unique: boolean; fields: string[] }>();
     for (const row of idxRows) {
-      if (!indicesMap.has(row.INDEX_NAME)) {
-        indicesMap.set(row.INDEX_NAME, {
-          name: row.INDEX_NAME,
-          unique: Number(row.UNIQUE_FLAG) === 1,
+      const idxName = this.extractString(row, 'INDEX_NAME');
+      const fldName = this.extractString(row, 'FIELD_NAME');
+      const isUnique = this.extractNumber(row, 'UNIQUE_FLAG') === 1;
+
+      if (!indicesMap.has(idxName)) {
+        indicesMap.set(idxName, {
+          name: idxName,
+          unique: isUnique,
           fields: []
         });
       }
-      indicesMap.get(row.INDEX_NAME)!.fields.push(row.FIELD_NAME);
+      if (fldName) {
+        indicesMap.get(idxName)!.fields.push(fldName);
+      }
     }
 
     let ddl = `CREATE TABLE ${cleanTableName} (\n`;
