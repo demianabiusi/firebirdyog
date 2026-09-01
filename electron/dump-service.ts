@@ -30,6 +30,7 @@ export interface DumpProgress {
 export interface ImportOptions {
   filePath: string;
   stopOnError: boolean;
+  ignoreExistingObjects?: boolean;
 }
 
 export interface ImportErrorItem {
@@ -37,6 +38,7 @@ export interface ImportErrorItem {
   statementSnippet: string;
   error: string;
   lineNumber: number;
+  isWarning?: boolean;
 }
 
 export interface ImportProgress {
@@ -89,6 +91,12 @@ export class DumpService {
     }
     const str = String(val).replace(/'/g, "''");
     return `'${str}'`;
+  }
+
+  private isAlreadyExistsError(errMsg: string, stmt: string): boolean {
+    const isMetadata = /^\s*(CREATE\s+(SEQUENCE|GENERATOR|TABLE|DOMAIN|VIEW|PROCEDURE|TRIGGER|INDEX|EXCEPTION)|ALTER\s+TABLE.*ADD\s+CONSTRAINT)/i.test(stmt);
+    if (!isMetadata) return false;
+    return /already exists|ya existe|unsuccessful metadata update|duplicate|table.*exists|sequence.*exists|column.*exists|defined/i.test(errMsg);
   }
 
   public async exportDatabase(
@@ -194,7 +202,7 @@ export class DumpService {
         await writeLine(`/* GENERADORES / SECUENCIAS                                   */`);
         await writeLine(`/* ========================================================== */`);
         for (const gen of schema.generators) {
-          await writeLine(`CREATE SEQUENCE ${gen};`);
+          await writeLine(`EXECUTE BLOCK AS BEGIN IF (NOT EXISTS (SELECT 1 FROM RDB$GENERATORS WHERE TRIM(RDB$GENERATOR_NAME) = '${gen}')) THEN EXECUTE STATEMENT 'CREATE SEQUENCE ${gen}'; END;`);
           statementCount++;
         }
         await writeLine(`COMMIT;`);
@@ -731,18 +739,32 @@ export class DumpService {
                   await this.firebirdService.executeQuery(stmtToRun);
                   executedStatements++;
                 } catch (err: any) {
-                  errorsCount++;
                   const errMsg = err.message || String(err);
-                  errors.push({
-                    statementIndex: totalStatements,
-                    statementSnippet: stmtToRun.length > 100 ? stmtToRun.slice(0, 100) + '...' : stmtToRun,
-                    error: errMsg,
-                    lineNumber
-                  });
+                  const isAlreadyExists = this.isAlreadyExistsError(errMsg, stmtToRun);
 
-                  if (options.stopOnError) {
-                    fileStream.destroy();
-                    throw new Error(`Error en línea ${lineNumber}: ${errMsg}\n\nSentencia:\n${stmtToRun}`);
+                  if (isAlreadyExists && options.ignoreExistingObjects !== false) {
+                    // Treat as warning (object already exists)
+                    errors.push({
+                      statementIndex: totalStatements,
+                      statementSnippet: stmtToRun.length > 100 ? stmtToRun.slice(0, 100) + '...' : stmtToRun,
+                      error: `Objeto ya existe (omitido): ${errMsg}`,
+                      lineNumber,
+                      isWarning: true
+                    });
+                  } else {
+                    errorsCount++;
+                    errors.push({
+                      statementIndex: totalStatements,
+                      statementSnippet: stmtToRun.length > 100 ? stmtToRun.slice(0, 100) + '...' : stmtToRun,
+                      error: errMsg,
+                      lineNumber,
+                      isWarning: false
+                    });
+
+                    if (options.stopOnError) {
+                      fileStream.destroy();
+                      throw new Error(`Error en línea ${lineNumber}: ${errMsg}\n\nSentencia:\n${stmtToRun}`);
+                    }
                   }
                 }
 
@@ -781,15 +803,29 @@ export class DumpService {
           await this.firebirdService.executeQuery(stmtToRun);
           executedStatements++;
         } catch (err: any) {
-          errorsCount++;
-          errors.push({
-            statementIndex: totalStatements,
-            statementSnippet: stmtToRun.slice(0, 100),
-            error: err.message || String(err),
-            lineNumber
-          });
-          if (options.stopOnError) {
-            throw err;
+          const errMsg = err.message || String(err);
+          const isAlreadyExists = this.isAlreadyExistsError(errMsg, stmtToRun);
+
+          if (isAlreadyExists && options.ignoreExistingObjects !== false) {
+            errors.push({
+              statementIndex: totalStatements,
+              statementSnippet: stmtToRun.slice(0, 100),
+              error: `Objeto ya existe (omitido): ${errMsg}`,
+              lineNumber,
+              isWarning: true
+            });
+          } else {
+            errorsCount++;
+            errors.push({
+              statementIndex: totalStatements,
+              statementSnippet: stmtToRun.slice(0, 100),
+              error: errMsg,
+              lineNumber,
+              isWarning: false
+            });
+            if (options.stopOnError) {
+              throw err;
+            }
           }
         }
       }

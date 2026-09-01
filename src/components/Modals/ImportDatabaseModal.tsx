@@ -34,6 +34,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [fileName, setFileName] = useState('');
   const [stopOnError, setStopOnError] = useState(true);
+  const [ignoreExistingObjects, setIgnoreExistingObjects] = useState(true);
 
   // Execution state
   const [isImporting, setIsImporting] = useState(false);
@@ -102,7 +103,8 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
 
     const options: ImportOptions = {
       filePath: filePath.trim(),
-      stopOnError
+      stopOnError,
+      ignoreExistingObjects
     };
 
     try {
@@ -196,18 +198,27 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                 </div>
               </div>
 
-              {/* Errors list if any */}
+              {/* Errors/Warnings list if any */}
               {result.errors.length > 0 && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 space-y-2">
-                  <div className="text-xs font-semibold text-red-400 flex items-center justify-between">
-                    <span>Errores registrados ({result.errors.length}):</span>
+                  <div className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
+                    <span>Registro de avisos y errores ({result.errors.length}):</span>
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-2 pr-1 font-mono text-[11px]">
                     {result.errors.map((err, idx) => (
-                      <div key={idx} className="p-2 bg-red-950/30 border border-red-500/30 rounded text-red-300">
-                        <div className="font-semibold text-red-400">Línea {err.lineNumber} (Sentencia #{err.statementIndex}):</div>
+                      <div 
+                        key={idx} 
+                        className={`p-2 rounded border ${
+                          err.isWarning 
+                            ? 'bg-amber-950/20 border-amber-500/30 text-amber-300' 
+                            : 'bg-red-950/30 border-red-500/30 text-red-300'
+                        }`}
+                      >
+                        <div className={`font-semibold ${err.isWarning ? 'text-amber-400' : 'text-red-400'}`}>
+                          {err.isWarning ? '⚠️ Aviso' : '❌ Error'} - Línea {err.lineNumber} (Sentencia #{err.statementIndex}):
+                        </div>
                         <div className="text-zinc-400 text-[10px] truncate">{err.statementSnippet}</div>
-                        <div className="text-red-300 mt-1">{err.error}</div>
+                        <div className="mt-1">{err.error}</div>
                       </div>
                     ))}
                   </div>
@@ -270,9 +281,25 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
 
                 <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                   <div>
-                    <span className="text-zinc-200 font-medium block">Detener al primer error</span>
+                    <span className="text-zinc-200 font-medium block">Omitir si los objetos ya existen</span>
                     <span className="text-[11px] text-zinc-500">
-                      Cancela la importación si una sentencia SQL falla (recomendado para conservar integridad)
+                      Continúa la importación si un generador, tabla o dominio ya existe en la base de datos destino
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={ignoreExistingObjects}
+                    disabled={isImporting}
+                    onChange={(e) => setIgnoreExistingObjects(e.target.checked)}
+                    className="rounded border-zinc-700 bg-zinc-900 text-blue-500 focus:ring-0"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
+                  <div>
+                    <span className="text-zinc-200 font-medium block">Detener al primer error fatal</span>
+                    <span className="text-[11px] text-zinc-500">
+                      Cancela la importación si ocurre un error inesperado de sintaxis o violación de datos
                     </span>
                   </div>
                   <input
