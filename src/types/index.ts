@@ -121,6 +121,37 @@ export interface ElectronAPI {
   saveSqlFile: (content: string, defaultPath?: string) => Promise<boolean>;
   openSqlFile: () => Promise<{ content: string; filePath: string } | null>;
   exportData: (data: string, defaultFilename: string, type: 'csv' | 'json' | 'sql') => Promise<boolean>;
+
+  // Database Dump / Export
+  selectDumpFile: (defaultFilename?: string) => Promise<string | null>;
+  startDump: (options: DumpOptions) => Promise<IpcResponse<{ filePath: string; totalStatements: number; durationMs: number }>>;
+  cancelDump: () => Promise<{ success: boolean }>;
+  showItemInFolder: (path: string) => Promise<boolean>;
+  onDumpProgress: (callback: (progress: DumpProgress) => void) => () => void;
+}
+
+export interface DumpOptions {
+  outputPath: string;
+  includeStructure: boolean;
+  includeData: boolean;
+  includeGenerators: boolean;
+  includeViews: boolean;
+  includeProcedures: boolean;
+  includeTriggers: boolean;
+  includeForeignKeys: boolean;
+  selectedTables: string[];
+  batchCommitSize?: number;
+}
+
+export interface DumpProgress {
+  stage: string;
+  currentTable?: string;
+  totalTables?: number;
+  currentTableIndex?: number;
+  rowsExported?: number;
+  totalRowsInTable?: number;
+  percentage: number;
+  message: string;
 }
 
 declare global {

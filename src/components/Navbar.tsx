@@ -8,7 +8,8 @@ import {
   PlusCircle, 
   HelpCircle,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -16,6 +17,7 @@ interface NavbarProps {
   activeConfig: ConnectionConfig | null;
   onOpenConnectionModal: () => void;
   onOpenCreateDbModal: () => void;
+  onOpenDumpModal?: () => void;
   onDisconnect: () => void;
   onNewQuery: () => void;
 }
@@ -25,6 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeConfig,
   onOpenConnectionModal,
   onOpenCreateDbModal,
+  onOpenDumpModal,
   onDisconnect,
   onNewQuery
 }) => {
@@ -58,6 +61,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           <PlusCircle className="w-3.5 h-3.5 text-amber-400" />
           <span>Nueva Consulta</span>
         </button>
+
+        {/* Dump / Export DB Action */}
+        {isConnected && onOpenDumpModal && (
+          <button
+            onClick={onOpenDumpModal}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-amber-300 hover:text-amber-200 text-xs rounded border border-zinc-800 hover:border-amber-500/30 transition-colors"
+            title="Exportar Base de Datos / Dump SQL completo (mysqldump)"
+          >
+            <Download className="w-3.5 h-3.5 text-amber-400" />
+            <span>Dump / Exportar BD</span>
+          </button>
+        )}
       </div>
 
       {/* Center Status: Connected Database */}

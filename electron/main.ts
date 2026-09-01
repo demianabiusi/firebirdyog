@@ -1,14 +1,16 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeImage, NativeImage, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeImage, NativeImage, Menu, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { FirebirdService } from './firebird-service';
 import { StorageService } from './storage-service';
+import { DumpService, DumpOptions, DumpProgress } from './dump-service';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 
 const firebirdService = new FirebirdService();
 const storageService = new StorageService();
+const dumpService = new DumpService(firebirdService);
 
 function getAppIcon(): NativeImage | string | undefined {
   const possiblePaths = [
@@ -285,3 +287,45 @@ ipcMain.handle('dialog:export-data', async (_, data: string, defaultFilename: st
   fs.writeFileSync(filePath, data, 'utf-8');
   return true;
 });
+
+// IPC: Database Dump / Export (mysqldump style)
+ipcMain.handle('fb:start-dump', async (_, options: DumpOptions) => {
+  try {
+    const res = await dumpService.exportDatabase(options, (progress: DumpProgress) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('fb:dump-progress', progress);
+      }
+    });
+    return { success: true, data: res };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al exportar base de datos' };
+  }
+});
+
+ipcMain.handle('fb:cancel-dump', async () => {
+  dumpService.cancel();
+  return { success: true };
+});
+
+ipcMain.handle('dialog:select-dump-file', async (_, defaultFilename?: string) => {
+  if (!mainWindow) return null;
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Ubicación para el Dump SQL de Firebird (.sql)',
+    defaultPath: defaultFilename || 'firebird_dump.sql',
+    filters: [
+      { name: 'SQL Script (*.sql)', extensions: ['sql'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  if (canceled || !filePath) return null;
+  return filePath;
+});
+
+ipcMain.handle('shell:show-item-in-folder', async (_, fullPath: string) => {
+  if (fullPath && fs.existsSync(fullPath)) {
+    shell.showItemInFolder(fullPath);
+    return true;
+  }
+  return false;
+});
+

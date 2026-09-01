@@ -9,6 +9,7 @@ import { ConnectionModal } from './components/Modals/ConnectionModal';
 import { TableDetailsModal } from './components/Modals/TableDetailsModal';
 import { CreateDatabaseModal } from './components/Modals/CreateDatabaseModal';
 import { TableDesignerModal } from './components/Modals/TableDesignerModal';
+import { DumpDatabaseModal } from './components/Modals/DumpDatabaseModal';
 import { Database, Plus, Sparkles } from 'lucide-react';
 
 const INITIAL_QUERY = `-- Bienvenido a FirebirdYog
@@ -29,6 +30,7 @@ export const App: React.FC = () => {
   const [savedConnections, setSavedConnections] = useState<ConnectionConfig[]>([]);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isCreateDbModalOpen, setIsCreateDbModalOpen] = useState(false);
+  const [isDumpModalOpen, setIsDumpModalOpen] = useState(false);
 
   // Table Designer states
   const [isTableDesignerOpen, setIsTableDesignerOpen] = useState(false);
@@ -530,6 +532,7 @@ END;
         activeConfig={activeConfig}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
         onOpenCreateDbModal={() => setIsCreateDbModalOpen(true)}
+        onOpenDumpModal={() => setIsDumpModalOpen(true)}
         onDisconnect={handleDisconnect}
         onNewQuery={handleAddTab}
       />
@@ -702,6 +705,14 @@ END;
       <TableDetailsModal
         tableName={selectedTableForDetails}
         onClose={() => setSelectedTableForDetails(null)}
+      />
+
+      {/* Database Dump / Export Modal */}
+      <DumpDatabaseModal
+        isOpen={isDumpModalOpen}
+        onClose={() => setIsDumpModalOpen(false)}
+        databaseName={activeConfig?.database}
+        tables={schemaObjects?.tables || []}
       />
 
     </div>

@@ -22,5 +22,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveSqlFile: (content: string, defaultPath?: string) => ipcRenderer.invoke('dialog:save-sql-file', content, defaultPath),
   openSqlFile: () => ipcRenderer.invoke('dialog:open-sql-file'),
   exportData: (data: string, defaultFilename: string, type: 'csv' | 'json' | 'sql') => 
-    ipcRenderer.invoke('dialog:export-data', data, defaultFilename, type)
+    ipcRenderer.invoke('dialog:export-data', data, defaultFilename, type),
+  
+  selectDumpFile: (defaultFilename?: string) => ipcRenderer.invoke('dialog:select-dump-file', defaultFilename),
+  startDump: (options: any) => ipcRenderer.invoke('fb:start-dump', options),
+  cancelDump: () => ipcRenderer.invoke('fb:cancel-dump'),
+  showItemInFolder: (path: string) => ipcRenderer.invoke('shell:show-item-in-folder', path),
+  onDumpProgress: (callback: (progress: any) => void) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on('fb:dump-progress', handler);
+    return () => ipcRenderer.removeListener('fb:dump-progress', handler);
+  }
 });
