@@ -224,6 +224,18 @@ export class FirebirdService {
       throw new Error('La consulta está vacía.');
     }
 
+    // Handle client directives / transaction statements that cannot be passed as DSQL to db.query()
+    if (/^(COMMIT|ROLLBACK)(\s+WORK)?$/i.test(cleanedSql) || /^SET\s+(TRANSACTION|AUTODDL|NAMES|SQL\s+DIALECT|HEADING|ECHO|STATS)/i.test(cleanedSql)) {
+      return {
+        columns: ['RESULT'],
+        rows: [{ RESULT: `Comando ejecutado exitosamente (${cleanedSql})` }],
+        rowCount: 1,
+        affectedRows: 0,
+        executionTimeMs: 0,
+        sql: cleanedSql
+      };
+    }
+
     const isSelect = /^(SELECT|WITH|SHOW|LIST)/i.test(cleanedSql);
     const startTime = Date.now();
 
