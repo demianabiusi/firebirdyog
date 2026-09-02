@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { QueryResult } from '../../types';
+import { useTranslation } from '../../i18n/I18nContext';
 import { exportToCsv, exportToJson, exportToSqlInserts } from '../../utils/exporter';
 import { 
   Download, 
@@ -23,6 +24,7 @@ interface DataGridProps {
 }
 
 export const DataGrid: React.FC<DataGridProps> = ({ result, isRunning }) => {
+  const { t } = useTranslation();
   const [filterText, setFilterText] = useState('');
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -152,7 +154,7 @@ export const DataGrid: React.FC<DataGridProps> = ({ result, isRunning }) => {
               type="text"
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Buscar en resultados..."
+              placeholder={t('common.search')}
               className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 pl-7 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
             />
             {filterText && (
@@ -175,8 +177,8 @@ export const DataGrid: React.FC<DataGridProps> = ({ result, isRunning }) => {
           </div>
 
           <div className="text-zinc-400 font-mono text-[11px]">
-            {totalRows} fila{totalRows !== 1 ? 's' : ''}
-            {result.hasMore && ' (Límite alcanzado)'}
+            {totalRows} {t('grid.rows')}
+            {result.hasMore && ' (Límite)'}
           </div>
 
           <div className="h-4 w-px bg-zinc-800" />
@@ -188,7 +190,7 @@ export const DataGrid: React.FC<DataGridProps> = ({ result, isRunning }) => {
               className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700/80 transition-colors text-xs font-medium"
             >
               <Download className="w-3.5 h-3.5 text-amber-400" />
-              <span>Exportar</span>
+              <span>{t('grid.exportCsv').split(' ')[0]}</span>
             </button>
 
             {showExportMenu && (
@@ -198,21 +200,21 @@ export const DataGrid: React.FC<DataGridProps> = ({ result, isRunning }) => {
                   className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-zinc-800 text-zinc-200 text-left"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Exportar a CSV</span>
+                  <span>{t('grid.exportCsv')}</span>
                 </button>
                 <button
                   onClick={() => handleExport('json')}
                   className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-zinc-800 text-zinc-200 text-left"
                 >
                   <FileJson className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Exportar a JSON</span>
+                  <span>{t('grid.exportJson')}</span>
                 </button>
                 <button
                   onClick={() => handleExport('sql')}
                   className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-zinc-800 text-zinc-200 text-left"
                 >
                   <FileText className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Exportar SQL INSERT</span>
+                  <span>{t('grid.exportSql')}</span>
                 </button>
               </div>
             )}

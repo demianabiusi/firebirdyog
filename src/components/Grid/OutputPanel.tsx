@@ -1,14 +1,15 @@
 import React from 'react';
 import { QueryResult, QueryHistoryItem } from '../../types';
+import { useTranslation } from '../../i18n/I18nContext';
 import { DataGrid } from './DataGrid';
 import { 
   Table as TableIcon, 
   Terminal, 
   History, 
   AlertCircle, 
-  CheckCircle,
-  Copy,
-  Trash2
+  CheckCircle, 
+  Copy, 
+  Trash2 
 } from 'lucide-react';
 
 interface OutputPanelProps {
@@ -32,6 +33,8 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
   onSelectHistorySql,
   onClearHistory
 }) => {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col h-full bg-zinc-900 border-t border-zinc-800 overflow-hidden">
       
@@ -49,7 +52,7 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
             }`}
           >
             <TableIcon className="w-3.5 h-3.5" />
-            <span>Resultados</span>
+            <span>{t('grid.gridTab')}</span>
             {result?.rowCount !== undefined && (
               <span className="text-[10px] bg-zinc-800 px-1.5 py-0.2 rounded text-zinc-300 font-mono">
                 {result.rowCount}
@@ -71,7 +74,7 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
             }`}
           >
             <Terminal className="w-3.5 h-3.5" />
-            <span>Mensajes</span>
+            <span>{t('grid.messagesTab')}</span>
             {error && (
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             )}
@@ -87,7 +90,7 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
             }`}
           >
             <History className="w-3.5 h-3.5" />
-            <span>Historial ({history.length})</span>
+            <span>{t('grid.historyTab')} ({history.length})</span>
           </button>
         </div>
 
@@ -137,21 +140,21 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
         {activeTab === 'history' && (
           <div className="h-full flex flex-col bg-zinc-950/40">
             <div className="p-2 border-b border-zinc-800/80 flex items-center justify-between text-xs">
-              <span className="text-zinc-400">Consultas ejecutadas recientemente</span>
+              <span className="text-zinc-400">{t('grid.historyTab')}</span>
               {history.length > 0 && (
                 <button
                   onClick={onClearHistory}
                   className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-red-400 px-2 py-0.5 rounded transition-colors"
                 >
                   <Trash2 className="w-3 h-3" />
-                  Limpiar historial
+                  {t('grid.clearHistory')}
                 </button>
               )}
             </div>
 
             <div className="flex-1 overflow-auto p-2 space-y-1.5 font-mono text-xs">
               {history.length === 0 ? (
-                <div className="text-zinc-600 text-center py-8">El historial está vacío.</div>
+                <div className="text-zinc-600 text-center py-8">{t('grid.historyEmpty')}</div>
               ) : (
                 history.map((item) => (
                   <div
@@ -164,7 +167,7 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
                         <span className="text-[10px] text-zinc-500">{item.timestamp}</span>
                         <span className="text-[10px] text-zinc-400">{item.durationMs}ms</span>
                         {item.rowCount !== undefined && (
-                          <span className="text-[10px] text-amber-500/80">({item.rowCount} filas)</span>
+                          <span className="text-[10px] text-amber-500/80">({item.rowCount} {t('grid.rows')})</span>
                         )}
                       </div>
                       <div className="text-zinc-300 truncate text-[11px] select-text">
@@ -179,7 +182,7 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
 
                     <button
                       onClick={() => onSelectHistorySql(item.sql)}
-                      title="Copiar a editor"
+                      title={t('common.copy')}
                       className="opacity-0 group-hover:opacity-100 p-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-opacity"
                     >
                       <Copy className="w-3.5 h-3.5" />

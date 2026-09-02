@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useTranslation } from '../../i18n/I18nContext';
 import { 
   Table as TableIcon, 
   Eye, 
@@ -86,6 +87,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
   onCreateTrigger,
   databaseName
 }) => {
+  const { t } = useTranslation();
   const [searchFilter, setSearchFilter] = useState('');
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     tables: false,
@@ -231,7 +233,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
           <button
             onClick={onRefresh}
             disabled={isLoading}
-            title="Refrescar metadatos"
+            title={t('common.refresh')}
             className="p-1 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-amber-400' : ''}`} />
@@ -245,7 +247,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
             type="text"
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            placeholder="Filtrar objetos..."
+            placeholder={t('sidebar.searchPlaceholder')}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-md pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/60 transition-colors"
           />
           {searchFilter && (
@@ -266,7 +268,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
         <div>
           <div
             onClick={() => toggleSection('tables')}
-            onContextMenu={(e) => openContextMenu(e, 'TABLE_SECTION', 'Tablas')}
+            onContextMenu={(e) => openContextMenu(e, 'TABLE_SECTION', t('sidebar.tables'))}
             className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-zinc-800/60 cursor-pointer text-zinc-300 font-medium group transition-colors"
           >
             <div className="flex items-center gap-1.5">
@@ -276,7 +278,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 <ChevronDown className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
               )}
               <TableIcon className="w-3.5 h-3.5 text-blue-400" />
-              <span>Tablas</span>
+              <span>{t('sidebar.tables')}</span>
             </div>
             <div className="flex items-center gap-1.5">
               {onCreateTable && (
@@ -286,7 +288,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                     e.stopPropagation();
                     onCreateTable();
                   }}
-                  title="Crear Nueva Tabla..."
+                  title={t('sidebar.createTable')}
                   className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded transition-colors opacity-0 group-hover:opacity-100"
                 >
                   <Plus className="w-3 h-3" />

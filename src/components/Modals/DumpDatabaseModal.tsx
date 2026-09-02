@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from '../../i18n/I18nContext';
 import { 
   Download, 
   Database, 
@@ -17,9 +18,9 @@ import {
   Zap, 
   Eye, 
   Table, 
-  Search,
-  RefreshCw,
-  ExternalLink
+  Search, 
+  RefreshCw, 
+  ExternalLink 
 } from 'lucide-react';
 import { DumpOptions, DumpProgress } from '../../types';
 
@@ -36,6 +37,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
   databaseName = 'DATABASE',
   tables = []
 }) => {
+  const { t } = useTranslation();
   // Dump settings
   const [includeStructure, setIncludeStructure] = useState(true);
   const [includeData, setIncludeData] = useState(true);
@@ -195,14 +197,14 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold text-zinc-100">
-                  Exportar Base de Datos / Dump SQL
+                  {t('dumpModal.title')}
                 </h2>
                 <span className="text-[10px] bg-amber-500/20 text-amber-400 font-mono font-bold px-2 py-0.5 rounded-full">
-                  mysqldump Firebird
+                  {t('dumpModal.tag')}
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Genera un script SQL completo con DDL, INSERTs de datos, generadores y triggers
+                {t('dumpModal.subtitle')}
               </p>
             </div>
           </div>
@@ -227,9 +229,9 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                 <CheckCircle2 className="w-7 h-7" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-emerald-300">¡Exportación Completada con Éxito!</h3>
+                <h3 className="text-base font-bold text-emerald-300">{t('dumpModal.successTitle')}</h3>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Se generaron <strong className="text-emerald-400 font-mono">{successResult.totalStatements}</strong> sentencias SQL en{' '}
+                  <strong className="text-emerald-400 font-mono">{successResult.totalStatements}</strong> {t('dumpModal.statementsGenerated')}{' '}
                   <strong className="text-zinc-200 font-mono">{(successResult.durationMs / 1000).toFixed(2)}s</strong>.
                 </p>
               </div>
@@ -245,14 +247,14 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                   className="flex items-center gap-1.5 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-xs font-medium transition-colors"
                 >
                   <FolderOpen className="w-4 h-4 text-amber-400" />
-                  <span>Mostrar en Carpeta</span>
+                  <span>{t('common.showInFolder')}</span>
                 </button>
                 <button
                   type="button"
                   onClick={onClose}
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs transition-colors"
                 >
-                  Cerrar
+                  {t('common.close')}
                 </button>
               </div>
             </div>
@@ -261,7 +263,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
               {/* Output File Path Card */}
               <div className="p-4 bg-zinc-950/80 border border-zinc-800 rounded-xl space-y-2">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-300">
-                  Archivo SQL de Destino:
+                  {t('dumpModal.destFile')}
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -269,7 +271,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                     value={outputPath}
                     onChange={(e) => setOutputPath(e.target.value)}
                     disabled={isExporting}
-                    placeholder="/ruta/hacia/firebird_dump.sql"
+                    placeholder="/path/to/firebird_dump.sql"
                     className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 disabled:opacity-50"
                   />
                   <button
@@ -279,7 +281,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                     className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-xs font-medium transition-colors shrink-0 disabled:opacity-50"
                   >
                     <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Examinar...</span>
+                    <span>{t('common.browse')}</span>
                   </button>
                 </div>
               </div>
@@ -290,12 +292,12 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                 {/* Left: Component Switches */}
                 <div className="bg-zinc-950/40 p-4 border border-zinc-800/80 rounded-xl space-y-3">
                   <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">
-                    <Layers className="w-3.5 h-3.5" /> Componentes a Exportar
+                    <Layers className="w-3.5 h-3.5" /> {t('dumpModal.components')}
                   </div>
 
                   <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                     <span className="flex items-center gap-2 text-zinc-200">
-                      <Table className="w-4 h-4 text-blue-400" /> Estructura de Tablas (DDL)
+                      <Table className="w-4 h-4 text-blue-400" /> {t('dumpModal.structure')}
                     </span>
                     <input
                       type="checkbox"
@@ -308,7 +310,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
 
                   <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                     <span className="flex items-center gap-2 text-zinc-200">
-                      <FileText className="w-4 h-4 text-emerald-400" /> Datos de Tablas (INSERT INTO)
+                      <FileText className="w-4 h-4 text-emerald-400" /> {t('dumpModal.data')}
                     </span>
                     <input
                       type="checkbox"
@@ -321,7 +323,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
 
                   <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                     <span className="flex items-center gap-2 text-zinc-200">
-                      <Hash className="w-4 h-4 text-purple-400" /> Generadores y Valores Actuales
+                      <Hash className="w-4 h-4 text-purple-400" /> {t('dumpModal.generators')}
                     </span>
                     <input
                       type="checkbox"
@@ -334,7 +336,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
 
                   <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                     <span className="flex items-center gap-2 text-zinc-200">
-                      <Key className="w-4 h-4 text-amber-400" /> Claves Foráneas (Foreign Keys)
+                      <Key className="w-4 h-4 text-amber-400" /> {t('dumpModal.foreignKeys')}
                     </span>
                     <input
                       type="checkbox"
@@ -347,7 +349,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
 
                   <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                     <span className="flex items-center gap-2 text-zinc-200">
-                      <Eye className="w-4 h-4 text-teal-400" /> Vistas (CREATE VIEW)
+                      <Eye className="w-4 h-4 text-teal-400" /> {t('dumpModal.views')}
                     </span>
                     <input
                       type="checkbox"
@@ -360,7 +362,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
 
                   <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                     <span className="flex items-center gap-2 text-zinc-200">
-                      <Cog className="w-4 h-4 text-amber-400" /> Procedimientos Almacenados
+                      <Cog className="w-4 h-4 text-amber-400" /> {t('dumpModal.procedures')}
                     </span>
                     <input
                       type="checkbox"
@@ -373,7 +375,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
 
                   <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                     <span className="flex items-center gap-2 text-zinc-200">
-                      <Zap className="w-4 h-4 text-yellow-400" /> Triggers
+                      <Zap className="w-4 h-4 text-yellow-400" /> {t('dumpModal.triggers')}
                     </span>
                     <input
                       type="checkbox"
@@ -386,17 +388,17 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
 
                   {/* Batch commit size */}
                   <div className="pt-2 border-t border-zinc-800 flex items-center justify-between text-xs">
-                    <span className="text-zinc-400">COMMIT cada N registros:</span>
+                    <span className="text-zinc-400">{t('dumpModal.commitEvery')}</span>
                     <select
                       value={batchCommitSize}
                       disabled={isExporting}
                       onChange={(e) => setBatchCommitSize(parseInt(e.target.value))}
                       className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none"
                     >
-                      <option value={100}>100 filas</option>
-                      <option value={500}>500 filas</option>
-                      <option value={1000}>1,000 filas</option>
-                      <option value={5000}>5,000 filas</option>
+                      <option value={100}>100 {t('grid.rows')}</option>
+                      <option value={500}>500 {t('grid.rows')}</option>
+                      <option value={1000}>1,000 {t('grid.rows')}</option>
+                      <option value={5000}>5,000 {t('grid.rows')}</option>
                     </select>
                   </div>
                 </div>
@@ -405,7 +407,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                 <div className="bg-zinc-950/40 p-4 border border-zinc-800/80 rounded-xl flex flex-col h-[360px]">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
-                      <Table className="w-3.5 h-3.5" /> Tablas ({selectedTables.length}/{tables.length})
+                      <Table className="w-3.5 h-3.5" /> {t('dumpModal.tablesTitle')} ({selectedTables.length}/{tables.length})
                     </div>
                     <div className="flex items-center gap-2 text-[11px]">
                       <button
@@ -414,7 +416,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                         disabled={isExporting}
                         className="text-amber-400 hover:underline disabled:opacity-50"
                       >
-                        Todas
+                        {t('common.all')}
                       </button>
                       <span>•</span>
                       <button
@@ -423,7 +425,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                         disabled={isExporting}
                         className="text-zinc-400 hover:underline disabled:opacity-50"
                       >
-                        Ninguna
+                        {t('common.none')}
                       </button>
                     </div>
                   </div>
@@ -435,7 +437,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                       type="text"
                       value={tableSearch}
                       onChange={(e) => setTableSearch(e.target.value)}
-                      placeholder="Filtrar tablas..."
+                      placeholder={t('dumpModal.filterTables')}
                       disabled={isExporting}
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-md pl-8 pr-3 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/60"
                     />
@@ -445,7 +447,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                   <div className="flex-1 overflow-y-auto divide-y divide-zinc-800/50 pr-1">
                     {filteredTables.length === 0 ? (
                       <div className="text-center text-zinc-500 text-xs py-8">
-                        {tables.length === 0 ? 'No hay tablas en la base de datos' : 'No se encontraron tablas'}
+                        {tables.length === 0 ? t('dumpModal.noTables') : t('common.none')}
                       </div>
                     ) : (
                       filteredTables.map(table => {
@@ -510,7 +512,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
         {!successResult && (
           <div className="px-6 py-3.5 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between shrink-0">
             <div className="text-xs text-zinc-500">
-              {tables.length > 0 ? `${selectedTables.length} de ${tables.length} tablas seleccionadas` : 'Sin tablas'}
+              {tables.length > 0 ? `${selectedTables.length} / ${tables.length}` : t('dumpModal.noTables')}
             </div>
 
             <div className="flex items-center gap-2.5">
@@ -520,7 +522,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                   onClick={handleCancelExport}
                   className="px-4 py-2 bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-500/40 rounded-lg text-xs font-semibold transition-colors"
                 >
-                  Cancelar Exportación
+                  {t('dumpModal.cancelExport')}
                 </button>
               ) : (
                 <>
@@ -529,7 +531,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                     onClick={onClose}
                     className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition-colors"
                   >
-                    Cancelar
+                    {t('common.cancel')}
                   </button>
 
                   <button
@@ -539,7 +541,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                     className="flex items-center gap-2 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-lg text-xs transition-all shadow-md shadow-amber-500/20 disabled:opacity-50"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Iniciar Exportación SQL</span>
+                    <span>{t('dumpModal.startExport')}</span>
                   </button>
                 </>
               )}

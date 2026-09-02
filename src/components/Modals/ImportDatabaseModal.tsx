@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from '../../i18n/I18nContext';
 import { 
   Upload, 
   Database, 
@@ -30,6 +31,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
   onSuccess,
   databaseName = 'DATABASE'
 }) => {
+  const { t } = useTranslation();
   const [filePath, setFilePath] = useState('');
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [fileName, setFileName] = useState('');
@@ -148,14 +150,14 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold text-zinc-100">
-                  Importar Dump / Script SQL
+                  {t('importModal.title')}
                 </h2>
                 <span className="text-[10px] bg-blue-500/20 text-blue-400 font-mono font-bold px-2 py-0.5 rounded-full">
-                  Stream Loader
+                  {t('importModal.tag')}
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Ejecuta archivos SQL de cualquier tamaño mediante flujo continuo sin saturar la memoria
+                {t('importModal.subtitle')}
               </p>
             </div>
           </div>
@@ -189,10 +191,10 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
 
                 <div>
                   <h3 className="text-base font-bold">
-                    {result.errorsCount === 0 ? '¡Importación Completada con Éxito!' : 'Importación Finalizada con Advertencias'}
+                    {result.errorsCount === 0 ? t('importModal.successTitle') : t('importModal.warningTitle')}
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1">
-                    Se ejecutaron <strong className="text-zinc-200 font-mono">{result.executedStatements}</strong> sentencias en{' '}
+                    <strong className="text-zinc-200 font-mono">{result.executedStatements}</strong> {t('importModal.statementsExecuted')}{' '}
                     <strong className="text-zinc-200 font-mono">{(result.durationMs / 1000).toFixed(2)}s</strong>.
                   </p>
                 </div>
@@ -202,7 +204,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
               {result.errors.length > 0 && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 space-y-2">
                   <div className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
-                    <span>Registro de avisos y errores ({result.errors.length}):</span>
+                    <span>{t('importModal.logTitle')} ({result.errors.length}):</span>
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-2 pr-1 font-mono text-[11px]">
                     {result.errors.map((err, idx) => (
@@ -215,7 +217,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                         }`}
                       >
                         <div className={`font-semibold ${err.isWarning ? 'text-amber-400' : 'text-red-400'}`}>
-                          {err.isWarning ? '⚠️ Aviso' : '❌ Error'} - Línea {err.lineNumber} (Sentencia #{err.statementIndex}):
+                          {err.isWarning ? '⚠️ ' + t('common.warning') : '❌ ' + t('common.error')} - {err.lineNumber} (#{err.statementIndex}):
                         </div>
                         <div className="text-zinc-400 text-[10px] truncate">{err.statementSnippet}</div>
                         <div className="mt-1">{err.error}</div>
@@ -231,7 +233,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                   onClick={onClose}
                   className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-lg text-xs transition-colors"
                 >
-                  Cerrar
+                  {t('common.close')}
                 </button>
               </div>
             </div>
@@ -240,7 +242,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
               {/* File Picker Card */}
               <div className="p-4 bg-zinc-950/80 border border-zinc-800 rounded-xl space-y-3">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-300">
-                  Seleccionar Archivo SQL (.sql):
+                  {t('importModal.selectFile')}
                 </label>
                 
                 <div className="flex items-center gap-2">
@@ -248,7 +250,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                     type="text"
                     value={filePath}
                     readOnly
-                    placeholder="Ningún archivo seleccionado..."
+                    placeholder={t('importModal.noFileSelected')}
                     className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none"
                   />
                   <button
@@ -258,7 +260,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                     className="flex items-center gap-1.5 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-xs font-medium transition-colors shrink-0 disabled:opacity-50"
                   >
                     <FolderOpen className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Examinar...</span>
+                    <span>{t('common.browse')}</span>
                   </button>
                 </div>
 
@@ -266,7 +268,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                   <div className="flex items-center gap-4 text-xs text-zinc-400 pt-1">
                     <span className="flex items-center gap-1">
                       <HardDrive className="w-3.5 h-3.5 text-zinc-500" />
-                      Tamaño: <strong className="text-amber-400 font-mono">{formatBytes(fileSize)}</strong>
+                      {t('importModal.fileSize')} <strong className="text-amber-400 font-mono">{formatBytes(fileSize)}</strong>
                     </span>
                     <span className="truncate max-w-sm text-zinc-500 font-mono">{fileName}</span>
                   </div>
@@ -276,14 +278,14 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
               {/* Import Options */}
               <div className="p-4 bg-zinc-950/40 border border-zinc-800/80 rounded-xl space-y-3">
                 <div className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
-                  Opciones de Ejecución
+                  {t('importModal.optionsTitle')}
                 </div>
 
                 <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                   <div>
-                    <span className="text-zinc-200 font-medium block">Omitir si los objetos ya existen</span>
+                    <span className="text-zinc-200 font-medium block">{t('importModal.ignoreExisting')}</span>
                     <span className="text-[11px] text-zinc-500">
-                      Continúa la importación si un generador, tabla o dominio ya existe en la base de datos destino
+                      {t('importModal.ignoreExistingDesc')}
                     </span>
                   </div>
                   <input
@@ -297,9 +299,9 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
 
                 <label className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900/60 cursor-pointer text-xs">
                   <div>
-                    <span className="text-zinc-200 font-medium block">Detener al primer error fatal</span>
+                    <span className="text-zinc-200 font-medium block">{t('importModal.stopOnError')}</span>
                     <span className="text-[11px] text-zinc-500">
-                      Cancela la importación si ocurre un error inesperado de sintaxis o violación de datos
+                      {t('importModal.stopOnErrorDesc')}
                     </span>
                   </div>
                   <input
@@ -334,21 +336,21 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                   {/* Metrics Grid */}
                   <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800 text-[11px]">
                     <div>
-                      <span className="text-zinc-500 block">Procesado:</span>
+                      <span className="text-zinc-500 block">{t('importModal.processed')}</span>
                       <span className="font-mono font-semibold text-zinc-200">
                         {formatBytes(progress.bytesProcessed)} / {formatBytes(progress.totalBytes)}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-zinc-500 block">Sentencias:</span>
+                      <span className="text-zinc-500 block">{t('importModal.statements')}</span>
                       <span className="font-mono font-semibold text-emerald-400">
                         {progress.statementsExecuted.toLocaleString()}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-zinc-500 block">Errores:</span>
+                      <span className="text-zinc-500 block">{t('importModal.errors')}</span>
                       <span className={`font-mono font-semibold ${progress.errorsCount > 0 ? 'text-red-400' : 'text-zinc-400'}`}>
                         {progress.errorsCount}
                       </span>
@@ -379,7 +381,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
         {!result && (
           <div className="px-6 py-3.5 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between shrink-0">
             <div className="text-xs text-zinc-500">
-              {filePath ? fileName : 'Selecciona un archivo .sql para comenzar'}
+              {filePath ? fileName : t('importModal.noFileSelected')}
             </div>
 
             <div className="flex items-center gap-2.5">
@@ -390,7 +392,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                   className="flex items-center gap-1.5 px-4 py-2 bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-500/40 rounded-lg text-xs font-semibold transition-colors"
                 >
                   <StopCircle className="w-3.5 h-3.5" />
-                  <span>Cancelar Importación</span>
+                  <span>{t('importModal.cancelImport')}</span>
                 </button>
               ) : (
                 <>
@@ -399,7 +401,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                     onClick={onClose}
                     className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition-colors"
                   >
-                    Cancelar
+                    {t('common.cancel')}
                   </button>
 
                   <button
@@ -409,7 +411,7 @@ export const ImportDatabaseModal: React.FC<ImportDatabaseModalProps> = ({
                     className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Ejecutar Importación</span>
+                    <span>{t('importModal.startImport')}</span>
                   </button>
                 </>
               )}

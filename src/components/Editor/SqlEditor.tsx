@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
+import { useTranslation } from '../../i18n/I18nContext';
 import { 
   Play, 
   PlaySquare, 
@@ -27,6 +28,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
   maxRows,
   onChangeMaxRows
 }) => {
+  const { t } = useTranslation();
   const editorRef = useRef<any>(null);
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
@@ -129,28 +131,28 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           <button
             onClick={() => onExecute(false)}
             disabled={isRunning || !sql.trim()}
-            title="Ejecutar todo o script actual (F9 o Ctrl+Enter)"
+            title={t('editor.executeTooltip')}
             className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-medium disabled:opacity-50 transition-colors shadow-xs"
           >
             <Play className={`w-3.5 h-3.5 fill-current ${isRunning ? 'animate-spin' : ''}`} />
-            <span>Ejecutar (F9)</span>
+            <span>{t('editor.execute')} (F9)</span>
           </button>
 
           <button
             onClick={handleExecuteSelected}
             disabled={isRunning || !sql.trim()}
-            title="Ejecutar sólo el texto seleccionado (Ctrl+Enter)"
+            title={t('editor.executeSelection')}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/80 rounded font-medium disabled:opacity-50 transition-colors"
           >
             <PlaySquare className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Selección</span>
+            <span>{t('editor.executeSelection')}</span>
           </button>
 
           <div className="h-4 w-px bg-zinc-800 mx-1" />
 
           <button
             onClick={handleOpenFromFile}
-            title="Abrir archivo .sql"
+            title={t('editor.openSql')}
             className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded transition-colors"
           >
             <FolderOpen className="w-3.5 h-3.5" />
@@ -158,7 +160,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
 
           <button
             onClick={handleSaveToFile}
-            title="Guardar como archivo .sql"
+            title={t('editor.saveSql')}
             className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded transition-colors"
           >
             <Save className="w-3.5 h-3.5" />
@@ -166,7 +168,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
 
           <button
             onClick={handleFormatSql}
-            title="Formatear palabras clave en mayúsculas"
+            title={t('editor.formatSql')}
             className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded transition-colors"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -174,7 +176,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
 
           <button
             onClick={() => onChange('')}
-            title="Limpiar editor"
+            title={t('editor.clear')}
             className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors"
           >
             <Eraser className="w-3.5 h-3.5" />
@@ -184,17 +186,17 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
         {/* Right Limit controls */}
         <div className="flex items-center gap-2 text-zinc-400">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-zinc-500">Límite:</span>
+            <span className="text-[11px] text-zinc-500">{t('editor.rowsLimit')}</span>
             <select
               value={maxRows}
               onChange={(e) => onChangeMaxRows(parseInt(e.target.value))}
               className="bg-zinc-900 border border-zinc-800 rounded px-2 py-0.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
             >
-              <option value={100}>100 filas</option>
-              <option value={500}>500 filas</option>
-              <option value={1000}>1,000 filas</option>
-              <option value={5000}>5,000 filas</option>
-              <option value={50000}>Sin límite (50k)</option>
+              <option value={100}>100 {t('grid.rows')}</option>
+              <option value={500}>500 {t('grid.rows')}</option>
+              <option value={1000}>1,000 {t('grid.rows')}</option>
+              <option value={5000}>5,000 {t('grid.rows')}</option>
+              <option value={50000}>50k {t('grid.rows')}</option>
             </select>
           </div>
         </div>

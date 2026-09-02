@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ConnectionConfig } from '../types';
+import { useTranslation } from '../i18n/I18nContext';
 import { 
   Flame, 
   Database, 
@@ -10,7 +11,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Download,
-  Upload
+  Upload,
+  Globe,
+  ChevronDown
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -34,6 +37,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onDisconnect,
   onNewQuery
 }) => {
+  const { t, language, setLanguage, availableLanguages } = useTranslation();
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+
+  const currentLang = availableLanguages.find(l => l.code === language) || availableLanguages[0];
+
   return (
     <header className="h-12 bg-zinc-950 border-b border-zinc-800/90 flex items-center justify-between px-4 select-none shrink-0">
       
@@ -48,7 +56,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div>
             <h1 className="text-sm font-bold tracking-wide text-zinc-100 flex items-center gap-1.5">
               Firebird<span className="text-amber-400">Yog</span>
-              <span className="text-[10px] font-normal px-1.5 py-0.2 bg-zinc-800 text-zinc-400 rounded">v1.0</span>
+              <span className="text-[10px] font-normal px-1.5 py-0.2 bg-zinc-800 text-zinc-400 rounded">
+                {t('navbar.brandSubtitle')}
+              </span>
             </h1>
           </div>
         </div>
@@ -59,10 +69,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button
           onClick={onNewQuery}
           className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs rounded border border-zinc-800 transition-colors"
-          title="Nueva pestaña SQL (Ctrl+N)"
+          title={t('navbar.newQueryTooltip')}
         >
           <PlusCircle className="w-3.5 h-3.5 text-amber-400" />
-          <span>Nueva Consulta</span>
+          <span>{t('navbar.newQuery')}</span>
         </button>
 
         {/* Dump / Export DB Action */}
@@ -70,10 +80,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={onOpenDumpModal}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-amber-300 hover:text-amber-200 text-xs rounded border border-zinc-800 hover:border-amber-500/30 transition-colors"
-            title="Exportar Base de Datos / Dump SQL completo (mysqldump)"
+            title={t('navbar.exportDumpTooltip')}
           >
             <Download className="w-3.5 h-3.5 text-amber-400" />
-            <span>Exportar Dump</span>
+            <span>{t('navbar.exportDump')}</span>
           </button>
         )}
 
@@ -82,10 +92,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={onOpenImportModal}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-blue-300 hover:text-blue-200 text-xs rounded border border-zinc-800 hover:border-blue-500/30 transition-colors"
-            title="Importar archivo Dump / Script SQL de cualquier tamaño"
+            title={t('navbar.importSqlTooltip')}
           >
             <Upload className="w-3.5 h-3.5 text-blue-400" />
-            <span>Importar SQL</span>
+            <span>{t('navbar.importSql')}</span>
           </button>
         )}
       </div>
@@ -101,20 +111,65 @@ export const Navbar: React.FC<NavbarProps> = ({
         ) : (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-xs text-zinc-500">
             <span className="w-2 h-2 rounded-full bg-zinc-600" />
-            <span>Desconectado</span>
+            <span>{t('common.disconnected')}</span>
           </div>
         )}
       </div>
 
-      {/* Right Connection Controls */}
+      {/* Right Connection Controls & Language Switcher */}
       <div className="flex items-center gap-2">
+        
+        {/* Language Selector Dropdown */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+            className="flex items-center gap-1 px-2 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-lg text-xs font-medium transition-colors"
+            title={t('navbar.language')}
+          >
+            <Globe className="w-3.5 h-3.5 text-amber-400" />
+            <span>{currentLang.flag}</span>
+            <span className="text-[11px] uppercase font-bold">{currentLang.code}</span>
+            <ChevronDown className="w-3 h-3 text-zinc-500" />
+          </button>
+
+          {isLangMenuOpen && (
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsLangMenuOpen(false)} 
+              />
+              <div className="absolute right-0 mt-1.5 z-50 w-32 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-xl py-1 divide-y divide-zinc-800/60 animate-in fade-in zoom-in-95 duration-100">
+                {availableLanguages.map((lang) => (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      setLanguage(lang.code);
+                      setIsLangMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                      lang.code === language 
+                        ? 'bg-amber-500/15 text-amber-300 font-semibold' 
+                        : 'text-zinc-300 hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span>{lang.flag}</span>
+                    <span>{lang.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
         <button
           onClick={onOpenCreateDbModal}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-medium transition-colors shadow-xs"
-          title="Crear un nuevo archivo de base de datos Firebird (.fdb)"
+          title={t('navbar.createDbTooltip')}
         >
           <PlusCircle className="w-3.5 h-3.5" />
-          <span>Crear BD</span>
+          <span>{t('navbar.createDb')}</span>
         </button>
 
         <button
@@ -122,17 +177,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-medium transition-colors shadow-xs"
         >
           <Database className="w-3.5 h-3.5" />
-          <span>{isConnected ? 'Cambiar Conexión' : 'Conectar a Firebird'}</span>
+          <span>{isConnected ? t('navbar.changeConnection') : t('navbar.connect')}</span>
         </button>
 
         {isConnected && (
           <button
             onClick={onDisconnect}
-            title="Desconectar sesión actual"
+            title={t('navbar.disconnectTooltip')}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 hover:bg-red-950/40 text-zinc-400 hover:text-red-300 border border-zinc-800 hover:border-red-500/30 rounded-lg text-xs transition-colors"
           >
             <Unplug className="w-3.5 h-3.5 text-red-400" />
-            <span>Desconectar</span>
+            <span>{t('navbar.disconnect')}</span>
           </button>
         )}
       </div>

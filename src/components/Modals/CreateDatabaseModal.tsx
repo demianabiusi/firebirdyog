@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ConnectionConfig } from '../../types';
+import { useTranslation } from '../../i18n/I18nContext';
 import { 
   Database, 
   Server, 
@@ -31,8 +32,8 @@ const COMMON_CHARSETS = [
 ];
 
 const PAGE_SIZES = [
-  { value: 16384, label: '16384 bytes (16 KB - Recomendado para FB 3/4/5)' },
-  { value: 8192, label: '8192 bytes (8 KB - Estándar FB 2.5/3)' },
+  { value: 16384, label: '16384 bytes (16 KB - FB 3/4/5)' },
+  { value: 8192, label: '8192 bytes (8 KB - FB 2.5/3)' },
   { value: 4096, label: '4096 bytes (4 KB - Legacy)' },
   { value: 32768, label: '32768 bytes (32 KB - FB 4/5)' }
 ];
@@ -42,7 +43,8 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
   onClose,
   onCreateAndConnect
 }) => {
-  const [name, setName] = useState('Mi Nueva Base de Datos');
+  const { t } = useTranslation();
+  const [name, setName] = useState('New Firebird DB');
   const [host, setHost] = useState('127.0.0.1');
   const [port, setPort] = useState(3050);
   const [database, setDatabase] = useState('/var/lib/firebird/data/nueva_base.fdb');
@@ -129,8 +131,8 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-zinc-100">Crear Nueva Base de Datos Firebird</h2>
-              <p className="text-xs text-zinc-400">Genera un nuevo archivo .fdb con estructura inicial limpia</p>
+              <h2 className="text-lg font-semibold text-zinc-100">{t('createDbModal.title')}</h2>
+              <p className="text-xs text-zinc-400">{t('createDbModal.subtitle')}</p>
             </div>
           </div>
 
@@ -147,13 +149,13 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
           
           {/* Profile Name */}
           <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1">Nombre de la Conexión / Perfil</label>
+            <label className="block text-xs font-medium text-zinc-300 mb-1">{t('connectionModal.connectionName')}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-              placeholder="Ej: Base de Producción, SistemaERP..."
+              placeholder="Production DB, MySystem..."
             />
           </div>
 
@@ -161,7 +163,7 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
               <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                <Server className="w-3.5 h-3.5 text-zinc-400" /> Servidor / Host
+                <Server className="w-3.5 h-3.5 text-zinc-400" /> {t('connectionModal.host')}
               </label>
               <input
                 type="text"
@@ -172,7 +174,7 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">Puerto</label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">{t('connectionModal.port')}</label>
               <input
                 type="number"
                 value={port}
@@ -187,9 +189,8 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
           <div>
             <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center justify-between">
               <span className="flex items-center gap-1">
-                <Database className="w-3.5 h-3.5 text-zinc-400" /> Ruta del Archivo Nuevo (.fdb)
+                <Database className="w-3.5 h-3.5 text-zinc-400" /> {t('createDbModal.databaseFile')}
               </span>
-              <span className="text-[11px] text-zinc-500">Ruta absoluta en el servidor o disco</span>
             </label>
             <div className="flex gap-2">
               <input
@@ -197,16 +198,16 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
                 value={database}
                 onChange={(e) => setDatabase(e.target.value)}
                 className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 font-mono focus:outline-none focus:border-amber-500"
-                placeholder="/var/lib/firebird/data/nueva_base.fdb o C:\db\nueva.fdb"
+                placeholder="/var/lib/firebird/data/new_database.fdb"
               />
               <button
                 type="button"
                 onClick={handleBrowseLocation}
-                title="Elegir ubicación para guardar"
+                title={t('common.browse')}
                 className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg flex items-center gap-1.5 text-xs transition-colors"
               >
                 <FolderPlus className="w-4 h-4 text-emerald-400" />
-                Examinar...
+                {t('common.browse')}
               </button>
             </div>
           </div>
@@ -215,7 +216,7 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                <User className="w-3.5 h-3.5 text-zinc-400" /> Usuario Administrador
+                <User className="w-3.5 h-3.5 text-zinc-400" /> {t('createDbModal.user')}
               </label>
               <input
                 type="text"
@@ -227,7 +228,7 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                <Lock className="w-3.5 h-3.5 text-zinc-400" /> Contraseña
+                <Lock className="w-3.5 h-3.5 text-zinc-400" /> {t('createDbModal.password')}
               </label>
               <input
                 type="password"
@@ -243,7 +244,7 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                <Sliders className="w-3.5 h-3.5 text-zinc-400" /> Page Size
+                <Sliders className="w-3.5 h-3.5 text-zinc-400" /> {t('createDbModal.pageSize')}
               </label>
               <select
                 value={pageSize}
@@ -251,40 +252,46 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
                 className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
               >
                 {PAGE_SIZES.map((ps) => (
-                  <option key={ps.value} value={ps.value}>{ps.value} bytes</option>
+                  <option key={ps.value} value={ps.value}>
+                    {ps.label}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                <Globe className="w-3.5 h-3.5 text-zinc-400" /> Default Charset
+                <Globe className="w-3.5 h-3.5 text-zinc-400" /> {t('createDbModal.charset')}
               </label>
               <select
                 value={charset}
                 onChange={(e) => setCharset(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 font-mono"
               >
                 {COMMON_CHARSETS.map((cs) => (
-                  <option key={cs} value={cs}>{cs}</option>
+                  <option key={cs} value={cs}>
+                    {cs}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">Dialecto SQL</label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">
+                {t('createDbModal.dialect')}
+              </label>
               <select
                 value={dialect}
-                onChange={(e) => setDialect(parseInt(e.target.value))}
+                onChange={(e) => setDialect(parseInt(e.target.value) || 3)}
                 className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
               >
-                <option value={3}>Dialect 3 (Estándar)</option>
+                <option value={3}>Dialect 3 (Default)</option>
                 <option value={1}>Dialect 1 (Legacy)</option>
               </select>
             </div>
           </div>
 
-          {/* Checkboxes */}
+          {/* Additional Options */}
           <div className="pt-2 space-y-2 border-t border-zinc-800 text-xs">
             <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
               <input
@@ -293,17 +300,7 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
                 onChange={(e) => setAutoConnect(e.target.checked)}
                 className="rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500"
               />
-              <span>Conectar automáticamente a la nueva base de datos tras crearla</span>
-            </label>
-
-            <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoSave}
-                onChange={(e) => setAutoSave(e.target.checked)}
-                className="rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500"
-              />
-              <span>Guardar en el gestor de conexiones guardadas</span>
+              <span>{t('createDbModal.createAndConnect')}</span>
             </label>
           </div>
 
@@ -324,7 +321,7 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
             onClick={onClose}
             className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition-colors"
           >
-            Cancelar
+            {t('common.cancel')}
           </button>
 
           <button
@@ -334,7 +331,7 @@ export const CreateDatabaseModal: React.FC<CreateDatabaseModalProps> = ({
             className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs disabled:opacity-50 transition-all shadow-md shadow-emerald-600/20"
           >
             <Sparkles className={`w-4 h-4 ${isCreating ? 'animate-spin' : ''}`} />
-            {isCreating ? 'Creando base de datos...' : 'Crear Base de Datos'}
+            {isCreating ? t('common.loading') : t('createDbModal.createAndConnect')}
           </button>
         </div>
 
