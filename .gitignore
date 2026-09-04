@@ -37,4 +37,5 @@ data/
 *.fdb
 *.gdb
 *.fbk
+*.sql
 release/
