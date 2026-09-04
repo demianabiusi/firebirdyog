@@ -61,6 +61,18 @@ export const App: React.FC = () => {
   const [activeTabId, setActiveTabId] = useState<string>('tab_1');
   const [maxRows, setMaxRows] = useState<number>(1000);
 
+  // F9/F5 key swap preference (persisted) — matches SQLyog behavior when enabled
+  const [swapF9F5, setSwapF9F5] = useState<boolean>(() =>
+    localStorage.getItem('firebirdyog_swap_f9f5') === 'true'
+  );
+  const handleToggleSwapF9F5 = () => {
+    setSwapF9F5(prev => {
+      const next = !prev;
+      localStorage.setItem('firebirdyog_swap_f9f5', String(next));
+      return next;
+    });
+  };
+
   // Refs so disconnect/save can always read the latest values without stale closures
   const tabsRef = useRef(tabs);
   const activeTabIdRef = useRef(activeTabId);
@@ -378,12 +390,31 @@ export const App: React.FC = () => {
     }
   };
 
-  // Keyboard shortcut listener for F9 and Ctrl+N
+  // Global keyboard shortcut handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F9') {
-        e.preventDefault();
-        handleExecuteQuery(false);
+      // If the focused element is inside the Monaco editor iframe/div, let Monaco handle it
+      const target = e.target as HTMLElement;
+      const isInMonaco =
+        target.closest('.monaco-editor') !== null ||
+        target.classList.contains('monaco-editor') ||
+        target.tagName === 'TEXTAREA' && target.closest('.monaco-editor') !== null;
+      if (isInMonaco) return;
+
+      const executeKey = swapF9F5 ? 'F5' : 'F9';
+      const refreshKey = swapF9F5 ? 'F9' : 'F5';
+
+      if (e.key === executeKey) {
+        // Only execute if connected — never open the connection modal via keyboard
+        if (isConnected) {
+          e.preventDefault();
+          handleExecuteQuery(false);
+        }
+      } else if (e.key === refreshKey) {
+        if (isConnected) {
+          e.preventDefault();
+          refreshSchema();
+        }
       } else if (e.ctrlKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         handleAddTab();
@@ -391,7 +422,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isConnected, activeTabId, tabs]);
+  }, [isConnected, activeTabId, tabs, swapF9F5]);
 
   // Handle Table Designer
   const handleOpenCreateTable = () => {
@@ -677,6 +708,8 @@ END;
               isRunning={activeTab.isRunning}
               maxRows={maxRows}
               onChangeMaxRows={setMaxRows}
+              swapF9F5={swapF9F5}
+              onToggleSwap={handleToggleSwapF9F5}
             />
           </div>
 

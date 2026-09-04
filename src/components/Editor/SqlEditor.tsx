@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { useTranslation } from '../../i18n/I18nContext';
 import { 
@@ -8,7 +8,7 @@ import {
   FolderOpen, 
   Eraser, 
   Sparkles,
-  Zap
+  ArrowLeftRight
 } from 'lucide-react';
 
 interface SqlEditorProps {
@@ -18,6 +18,8 @@ interface SqlEditorProps {
   isRunning: boolean;
   maxRows: number;
   onChangeMaxRows: (val: number) => void;
+  swapF9F5: boolean;
+  onToggleSwap: () => void;
 }
 
 export const SqlEditor: React.FC<SqlEditorProps> = ({
@@ -26,13 +28,18 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
   onExecute,
   isRunning,
   maxRows,
-  onChangeMaxRows
+  onChangeMaxRows,
+  swapF9F5,
+  onToggleSwap
 }) => {
   const { t } = useTranslation();
   const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+  const executeKey = swapF9F5 ? 'F5' : 'F9';
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
 
     // Custom Firebird SQL Autocompletions
     monaco.languages.registerCompletionItemProvider('sql', {
@@ -69,13 +76,14 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
       }
     });
 
-    // Keybindings: F9 or Ctrl+Enter / Cmd+Enter to execute
-    editor.addCommand(monaco.KeyCode.F9, () => {
+    // Register the execute keybinding based on current swapF9F5 value
+    const executeKeyCode = swapF9F5 ? monaco.KeyCode.F5 : monaco.KeyCode.F9;
+    editor.addCommand(executeKeyCode, () => {
       onExecute(false);
     });
 
+    // Ctrl+Enter: execute all or selected
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      // Check if user has selected text
       const selection = editor.getSelection();
       if (selection && !selection.isEmpty()) {
         onExecute(true);
@@ -84,6 +92,19 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
       }
     });
   };
+
+  // Re-register the execute keybinding whenever swapF9F5 changes
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+
+    const executeKeyCode = swapF9F5 ? monaco.KeyCode.F5 : monaco.KeyCode.F9;
+    editor.addCommand(executeKeyCode, () => {
+      onExecute(false);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swapF9F5]);
 
   const handleExecuteSelected = () => {
     if (editorRef.current) {
@@ -112,7 +133,6 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
   };
 
   const handleFormatSql = () => {
-    // Simple uppercase format for keywords
     const formatted = sql.replace(
       /\b(select|from|where|and|or|order by|group by|insert into|values|update|set|delete|left join|inner join|right join|join|having|rows|create table|drop table|alter table|begin|end)\b/gi,
       (match) => match.toUpperCase()
@@ -135,7 +155,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
             className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-medium disabled:opacity-50 transition-colors shadow-xs"
           >
             <Play className={`w-3.5 h-3.5 fill-current ${isRunning ? 'animate-spin' : ''}`} />
-            <span>{t('editor.execute')} (F9)</span>
+            <span>{t('editor.execute')} ({executeKey})</span>
           </button>
 
           <button
@@ -181,9 +201,29 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           >
             <Eraser className="w-3.5 h-3.5" />
           </button>
+
+          <div className="h-4 w-px bg-zinc-800 mx-1" />
+
+          {/* F9/F5 swap toggle */}
+          <button
+            onClick={onToggleSwap}
+            title={
+              swapF9F5
+                ? 'Modo SQLyog activo: F5 ejecuta, F9 refresca schema. Clic para volver al modo estándar.'
+                : 'Modo estándar: F9 ejecuta. Clic para activar modo SQLyog (F5 ejecuta, F9 refresca).'
+            }
+            className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[11px] font-mono font-semibold transition-colors ${
+              swapF9F5
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+                : 'bg-zinc-800/60 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300'
+            }`}
+          >
+            <ArrowLeftRight className="w-3 h-3" />
+            <span>{swapF9F5 ? 'F5=Ejecutar' : 'F9=Ejecutar'}</span>
+          </button>
         </div>
 
-        {/* Right Limit controls */}
+        {/* Right: row limit */}
         <div className="flex items-center gap-2 text-zinc-400">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] text-zinc-500">{t('editor.rowsLimit')}</span>
