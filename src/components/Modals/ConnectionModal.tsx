@@ -43,11 +43,14 @@ const DEFAULT_CONFIG: ConnectionConfig = {
 const COMMON_CHARSETS = [
   'UTF8',
   'ISO8859_1',
+  'LATIN1',
   'WIN1252',
   'NONE',
   'ASCII',
   'UNICODE_FSS',
-  'DOS850'
+  'DOS850',
+  'ISO8859_2',
+  'WIN1251'
 ];
 
 export const ConnectionModal: React.FC<ConnectionModalProps> = ({
@@ -422,15 +425,21 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
                   <Globe className="w-3.5 h-3.5 text-zinc-400" /> Charset
                 </label>
-                <select
-                  value={selectedConfig.charset}
-                  onChange={(e) => setSelectedConfig({ ...selectedConfig, charset: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                >
-                  {COMMON_CHARSETS.map((cs) => (
-                    <option key={cs} value={cs}>{cs}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="charset-suggestions"
+                    value={selectedConfig.charset || ''}
+                    onChange={(e) => setSelectedConfig({ ...selectedConfig, charset: e.target.value.toUpperCase() })}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                    placeholder="UTF8"
+                  />
+                  <datalist id="charset-suggestions">
+                    {COMMON_CHARSETS.map((cs) => (
+                      <option key={cs} value={cs} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">Dialecto SQL</label>

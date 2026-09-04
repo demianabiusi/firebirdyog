@@ -32,6 +32,12 @@ export class FirebirdService {
   public async testConnection(options: FirebirdConnectionOptions): Promise<{ success: boolean; message: string; pingMs: number }> {
     const start = Date.now();
     return new Promise((resolve) => {
+      const normalizeCharset = (cs?: string): string => {
+        const raw = (cs || 'UTF8').trim().toUpperCase();
+        if (raw === 'ISO-8859-1' || raw === 'ISO_8859_1' || raw === 'ISO8859-1') return 'ISO8859_1';
+        return raw;
+      };
+
       const fbOptions: FirebirdType.Options = {
         host: options.host || '127.0.0.1',
         port: Number(options.port) || 3050,
@@ -39,7 +45,7 @@ export class FirebirdService {
         user: options.user || 'SYSDBA',
         password: options.password || 'masterkey',
         role: options.role || undefined,
-        encoding: (options.charset || 'UTF8') as any,
+        encoding: normalizeCharset(options.charset) as any,
         blobAsText: true,
         lowercase_keys: false
       };
@@ -73,6 +79,12 @@ export class FirebirdService {
       await this.disconnect();
     }
 
+    const normalizeCharset = (cs?: string): string => {
+      const raw = (cs || 'UTF8').trim().toUpperCase();
+      if (raw === 'ISO-8859-1' || raw === 'ISO_8859_1' || raw === 'ISO8859-1') return 'ISO8859_1';
+      return raw;
+    };
+
     const fbOptions: FirebirdType.Options = {
       host: options.host || '127.0.0.1',
       port: Number(options.port) || 3050,
@@ -80,7 +92,7 @@ export class FirebirdService {
       user: options.user || 'SYSDBA',
       password: options.password || 'masterkey',
       role: options.role || undefined,
-      encoding: (options.charset || 'UTF8') as any,
+      encoding: normalizeCharset(options.charset) as any,
       blobAsText: true,
       lowercase_keys: false
     };
@@ -102,6 +114,12 @@ export class FirebirdService {
       await this.disconnect();
     }
 
+    const normalizeCharset = (cs?: string): string => {
+      const raw = (cs || 'UTF8').trim().toUpperCase();
+      if (raw === 'ISO-8859-1' || raw === 'ISO_8859_1' || raw === 'ISO8859-1') return 'ISO8859_1';
+      return raw;
+    };
+
     const fbOptions: FirebirdType.Options = {
       host: options.host || '127.0.0.1',
       port: Number(options.port) || 3050,
@@ -110,7 +128,7 @@ export class FirebirdService {
       password: options.password || 'masterkey',
       role: options.role || undefined,
       pageSize: options.pageSize || 16384,
-      encoding: (options.charset || 'UTF8') as any,
+      encoding: normalizeCharset(options.charset) as any,
       blobAsText: true,
       lowercase_keys: false
     };
