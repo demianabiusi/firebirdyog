@@ -76,35 +76,38 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
       }
     });
 
-    // Register the execute keybinding based on current swapF9F5 value
-    const executeKeyCode = swapF9F5 ? monaco.KeyCode.F5 : monaco.KeyCode.F9;
-    editor.addCommand(executeKeyCode, () => {
-      onExecute(false);
-    });
-
     // Ctrl+Enter: execute all or selected
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       const selection = editor.getSelection();
       if (selection && !selection.isEmpty()) {
-        onExecute(true);
+        onExecuteRef.current(true);
       } else {
-        onExecute(false);
+        onExecuteRef.current(false);
+      }
+    });
+
+    // Intercept editor keydown to prevent browser/Electron refresh on F5 or F9
+    editor.onKeyDown((e: any) => {
+      if (e.keyCode === monaco.KeyCode.F5 || e.keyCode === monaco.KeyCode.F9) {
+        e.preventDefault();
+        e.stopPropagation();
+        const isSwap = swapRef.current;
+        const shouldExecute = isSwap
+          ? e.keyCode === monaco.KeyCode.F5
+          : e.keyCode === monaco.KeyCode.F9;
+
+        if (shouldExecute) {
+          onExecuteRef.current(false);
+        }
       }
     });
   };
 
-  // Re-register the execute keybinding whenever swapF9F5 changes
-  useEffect(() => {
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
+  const onExecuteRef = useRef(onExecute);
+  useEffect(() => { onExecuteRef.current = onExecute; }, [onExecute]);
 
-    const executeKeyCode = swapF9F5 ? monaco.KeyCode.F5 : monaco.KeyCode.F9;
-    editor.addCommand(executeKeyCode, () => {
-      onExecute(false);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [swapF9F5]);
+  const swapRef = useRef(swapF9F5);
+  useEffect(() => { swapRef.current = swapF9F5; }, [swapF9F5]);
 
   const handleExecuteSelected = () => {
     if (editorRef.current) {

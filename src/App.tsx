@@ -207,21 +207,26 @@ export const App: React.FC = () => {
     });
   };
 
+  const isConnectedRef = useRef(isConnected);
+  useEffect(() => { isConnectedRef.current = isConnected; }, [isConnected]);
+
   // Execute active query
-  const handleExecuteQuery = async (selectedOnly: boolean = false) => {
-    if (!isConnected) {
+  const handleExecuteQuery = useCallback(async (selectedOnly: boolean = false) => {
+    if (!isConnectedRef.current) {
+      // If user clicked or pressed execute while not connected, prompt to connect
       setIsConnectionModalOpen(true);
       return;
     }
 
-    const currentTab = tabs.find(t => t.id === activeTabId);
+    const targetTabId = activeTabIdRef.current;
+    const currentTab = tabsRef.current.find(t => t.id === targetTabId);
     if (!currentTab) return;
 
     const queryToRun = currentTab.sql.trim();
     if (!queryToRun) return;
 
     // Set tab running state
-    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, isRunning: true, error: null } : t));
+    setTabs(prev => prev.map(t => t.id === targetTabId ? { ...t, isRunning: true, error: null } : t));
 
     const startTime = Date.now();
 
@@ -233,7 +238,7 @@ export const App: React.FC = () => {
         if (res.success && res.data) {
           const queryResult = res.data;
           setTabs(prev => prev.map(t => 
-            t.id === activeTabId 
+            t.id === targetTabId 
               ? { 
                   ...t, 
                   result: queryResult, 
@@ -259,7 +264,7 @@ export const App: React.FC = () => {
         } else {
           const errMsg = res.error || 'Error al ejecutar la consulta';
           setTabs(prev => prev.map(t => 
-            t.id === activeTabId 
+            t.id === targetTabId 
               ? { 
                   ...t, 
                   result: null, 
@@ -287,7 +292,7 @@ export const App: React.FC = () => {
       const duration = Date.now() - startTime;
       const errMsg = err.message || 'Error inesperado';
       setTabs(prev => prev.map(t => 
-        t.id === activeTabId 
+        t.id === targetTabId 
           ? { 
               ...t, 
               result: null, 
@@ -310,7 +315,7 @@ export const App: React.FC = () => {
         ...prev.slice(0, 49)
       ]);
     }
-  };
+  }, [maxRows]);
 
   // Add new tab
   const handleAddTab = () => {
@@ -390,29 +395,35 @@ export const App: React.FC = () => {
     }
   };
 
-  // Global keyboard shortcut handler
+  // Global keyboard shortcut handler (Capture phase to prevent browser/Electron native F5 reload)
+  const swapF9F5Ref = useRef(swapF9F5);
+  useEffect(() => { swapF9F5Ref.current = swapF9F5; }, [swapF9F5]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If the focused element is inside the Monaco editor iframe/div, let Monaco handle it
-      const target = e.target as HTMLElement;
-      const isInMonaco =
-        target.closest('.monaco-editor') !== null ||
-        target.classList.contains('monaco-editor') ||
-        target.tagName === 'TEXTAREA' && target.closest('.monaco-editor') !== null;
-      if (isInMonaco) return;
+      const isF5 = e.key === 'F5' || e.code === 'F5' || e.keyCode === 116;
+      const isF9 = e.key === 'F9' || e.code === 'F9' || e.keyCode === 120;
 
-      const executeKey = swapF9F5 ? 'F5' : 'F9';
-      const refreshKey = swapF9F5 ? 'F9' : 'F5';
+      // Prevent native browser refresh on F5 across the entire application
+      if (isF5) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
 
-      if (e.key === executeKey) {
-        // Only execute if connected — never open the connection modal via keyboard
-        if (isConnected) {
-          e.preventDefault();
+      const isSwap = swapF9F5Ref.current;
+      const isExecuteKey = isSwap ? isF5 : isF9;
+      const isRefreshKey = isSwap ? isF9 : isF5;
+
+      if (isExecuteKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isConnectedRef.current) {
           handleExecuteQuery(false);
         }
-      } else if (e.key === refreshKey) {
-        if (isConnected) {
-          e.preventDefault();
+      } else if (isRefreshKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isConnectedRef.current) {
           refreshSchema();
         }
       } else if (e.ctrlKey && e.key.toLowerCase() === 'n') {
@@ -420,9 +431,10 @@ export const App: React.FC = () => {
         handleAddTab();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isConnected, activeTabId, tabs, swapF9F5]);
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [handleExecuteQuery, refreshSchema]);
 
   // Handle Table Designer
   const handleOpenCreateTable = () => {
