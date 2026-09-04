@@ -67,10 +67,21 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; pingMs?: number } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [autoConnectOnStartup, setAutoConnectOnStartup] = useState(true);
   // Tracks the ID the user last manually selected inside the modal (persists across opens)
   const lastSelectedIdRef = React.useRef<string | null>(null);
   // Tracks whether the modal was already open (to avoid resetting selection on connection refresh)
   const wasOpenRef = React.useRef(false);
+
+  useEffect(() => {
+    if (isOpen && window.electronAPI?.getAppSettings) {
+      window.electronAPI.getAppSettings().then((settings) => {
+        if (settings && typeof settings.autoConnectOnStartup === 'boolean') {
+          setAutoConnectOnStartup(settings.autoConnectOnStartup);
+        }
+      });
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
@@ -485,15 +496,31 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
 
         {/* Footer Actions */}
         <div className="px-6 py-3.5 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={handleTest}
-            disabled={isTesting || !selectedConfig.database}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 disabled:opacity-50 transition-colors"
-          >
-            <Zap className={`w-3.5 h-3.5 text-amber-400 ${isTesting ? 'animate-spin' : ''}`} />
-            {isTesting ? 'Probando...' : 'Probar Conexión'}
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handleTest}
+              disabled={isTesting || !selectedConfig.database}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 disabled:opacity-50 transition-colors"
+            >
+              <Zap className={`w-3.5 h-3.5 text-amber-400 ${isTesting ? 'animate-spin' : ''}`} />
+              {isTesting ? 'Probando...' : 'Probar Conexión'}
+            </button>
+
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-400 hover:text-zinc-200 select-none">
+              <input
+                type="checkbox"
+                checked={autoConnectOnStartup}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setAutoConnectOnStartup(val);
+                  window.electronAPI?.saveAppSettings?.({ autoConnectOnStartup: val });
+                }}
+                className="rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500 cursor-pointer"
+              />
+              <span>Auto-reconectar al iniciar</span>
+            </label>
+          </div>
 
           <div className="flex items-center gap-2.5">
             <button

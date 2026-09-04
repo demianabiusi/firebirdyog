@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeImage, NativeImage, Menu, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeImage, NativeImage, Menu, shell, screen } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { FirebirdService } from './firebird-service';
@@ -11,6 +11,54 @@ let mainWindow: BrowserWindow | null = null;
 const firebirdService = new FirebirdService();
 const storageService = new StorageService();
 const dumpService = new DumpService(firebirdService);
+
+interface WindowState {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  isMaximized: boolean;
+}
+
+function loadWindowState(): WindowState {
+  const defaultState: WindowState = {
+    width: 1300,
+    height: 850,
+    isMaximized: false
+  };
+
+  try {
+    const userDataPath = app.getPath('userData');
+    const stateFile = path.join(userDataPath, 'window-state.json');
+    if (fs.existsSync(stateFile)) {
+      const data = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+      return { ...defaultState, ...data };
+    }
+  } catch (err) {
+    console.error('Error loading window state:', err);
+  }
+  return defaultState;
+}
+
+function saveWindowState(win: BrowserWindow) {
+  try {
+    const userDataPath = app.getPath('userData');
+    const stateFile = path.join(userDataPath, 'window-state.json');
+    const isMaximized = win.isMaximized();
+    const bounds = (isMaximized && (win as any).getNormalBounds) ? (win as any).getNormalBounds() : win.getBounds();
+
+    const state: WindowState = {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      isMaximized
+    };
+    fs.writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving window state:', err);
+  }
+}
 
 function getAppIcon(): NativeImage | string | undefined {
   const isWin = process.platform === 'win32';
@@ -47,19 +95,37 @@ function getAppIcon(): NativeImage | string | undefined {
 
 function createWindow() {
   const appIcon = getAppIcon();
+  const windowState = loadWindowState();
+
+  // Validate that saved position falls within any currently connected display
+  let hasValidPosition = false;
+  if (typeof windowState.x === 'number' && typeof windowState.y === 'number') {
+    const displays = screen.getAllDisplays();
+    hasValidPosition = displays.some(display => {
+      const { x, y, width, height } = display.bounds;
+      return (
+        windowState.x! >= x &&
+        windowState.x! < x + width &&
+        windowState.y! >= y &&
+        windowState.y! < y + height
+      );
+    });
+  }
 
   // Disable default native Electron menu
   Menu.setApplicationMenu(null);
 
   mainWindow = new BrowserWindow({
-    width: 1300,
-    height: 850,
+    width: windowState.width || 1300,
+    height: windowState.height || 850,
+    ...(hasValidPosition ? { x: windowState.x, y: windowState.y } : {}),
     minWidth: 900,
     minHeight: 600,
     title: 'FirebirdYog - Firebird Database Client',
     icon: appIcon,
     backgroundColor: '#09090b',
     autoHideMenuBar: true,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -68,9 +134,32 @@ function createWindow() {
     }
   });
 
+  if (windowState.isMaximized) {
+    mainWindow.maximize();
+  }
+  mainWindow.show();
+
   if (appIcon && typeof appIcon !== 'string') {
     mainWindow.setIcon(appIcon);
   }
+
+  let saveTimer: NodeJS.Timeout | null = null;
+  const debouncedSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        saveWindowState(mainWindow);
+      }
+    }, 500);
+  };
+
+  mainWindow.on('resize', debouncedSave);
+  mainWindow.on('move', debouncedSave);
+  mainWindow.on('close', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      saveWindowState(mainWindow);
+    }
+  });
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -103,6 +192,25 @@ app.on('window-all-closed', async () => {
   }
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+// IPC: App Settings
+ipcMain.handle('app:get-settings', async () => {
+  try {
+    return storageService.getSettings();
+  } catch (err: any) {
+    console.error('Error getting app settings:', err);
+    return { lastActiveConnectionId: null, autoConnectOnStartup: true };
+  }
+});
+
+ipcMain.handle('app:save-settings', async (_, patch) => {
+  try {
+    return storageService.saveSettings(patch);
+  } catch (err: any) {
+    console.error('Error saving app settings:', err);
+    return storageService.getSettings();
   }
 });
 

@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   disconnect: () => ipcRenderer.invoke('fb:disconnect'),
   getConnectionStatus: () => ipcRenderer.invoke('fb:get-status'),
   
+  getAppSettings: () => ipcRenderer.invoke('app:get-settings'),
+  saveAppSettings: (patch: any) => ipcRenderer.invoke('app:save-settings', patch),
+  
   getSchemaObjects: () => ipcRenderer.invoke('fb:get-schema-objects'),
   getTableDetails: (tableName: string) => ipcRenderer.invoke('fb:get-table-details', tableName),
   getObjectDdl: (type: string, name: string) => ipcRenderer.invoke('fb:get-object-ddl', type, name),

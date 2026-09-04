@@ -87,6 +87,11 @@ export interface IpcResponse<T = any> {
 }
 
 // Window Electron API interface
+export interface AppSettings {
+  lastActiveConnectionId?: string | null;
+  autoConnectOnStartup?: boolean;
+}
+
 export interface ElectronAPI {
   // Connection management
   getSavedConnections: () => Promise<ConnectionConfig[]>;
@@ -96,6 +101,10 @@ export interface ElectronAPI {
   connect: (config: ConnectionConfig) => Promise<IpcResponse<{ database: string }>>;
   disconnect: () => Promise<IpcResponse<boolean>>;
   getConnectionStatus: () => Promise<{ isConnected: boolean; config: ConnectionConfig | null }>;
+  
+  // App settings & persistence
+  getAppSettings: () => Promise<AppSettings>;
+  saveAppSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>;
   
   // Metadata
   getSchemaObjects: () => Promise<IpcResponse<{

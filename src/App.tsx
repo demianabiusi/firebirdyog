@@ -138,20 +138,8 @@ export const App: React.FC = () => {
     }
   }, [isConnected]);
 
-  useEffect(() => {
-    loadSavedConnections();
-  }, [loadSavedConnections]);
-
-  useEffect(() => {
-    if (isConnected && activeConfig) {
-      refreshSchema();
-    } else {
-      setSchemaObjects(null);
-    }
-  }, [isConnected, activeConfig, refreshSchema]);
-
   // Connect action
-  const handleConnect = async (config: ConnectionConfig) => {
+  const handleConnect = useCallback(async (config: ConnectionConfig) => {
     if (window.electronAPI?.connect) {
       setSchemaObjects(null);
       setIsLoadingSchema(true);
@@ -162,6 +150,7 @@ export const App: React.FC = () => {
       }
       setActiveConfig(config);
       setIsConnected(true);
+      window.electronAPI?.saveAppSettings?.({ lastActiveConnectionId: config.id });
 
       // Restore this connection's workspace (tabs, activeTab, maxRows)
       const workspace = hydrateWorkspace(config.id);
@@ -181,7 +170,49 @@ export const App: React.FC = () => {
         setIsLoadingSchema(false);
       }
     }
-  };
+  }, []);
+
+  // Load saved connections and auto-connect on startup
+  const autoConnectAttempted = useRef(false);
+  useEffect(() => {
+    const initStartup = async () => {
+      try {
+        if (!window.electronAPI?.getSavedConnections) return;
+        const conns = await window.electronAPI.getSavedConnections();
+        setSavedConnections(conns || []);
+
+        if (!autoConnectAttempted.current && conns && conns.length > 0) {
+          autoConnectAttempted.current = true;
+          const settings = await window.electronAPI.getAppSettings?.();
+          const autoConnect = settings?.autoConnectOnStartup !== false;
+          const lastId = settings?.lastActiveConnectionId;
+
+          if (autoConnect && lastId) {
+            const targetConn = conns.find(c => c.id === lastId);
+            if (targetConn) {
+              try {
+                await handleConnect(targetConn);
+              } catch (err) {
+                console.warn('Auto-reconnect on startup failed:', err);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error initializing startup connections:', err);
+      }
+    };
+
+    initStartup();
+  }, [handleConnect]);
+
+  useEffect(() => {
+    if (isConnected && activeConfig) {
+      refreshSchema();
+    } else {
+      setSchemaObjects(null);
+    }
+  }, [isConnected, activeConfig, refreshSchema]);
 
   // Disconnect action
   const handleDisconnect = async () => {
@@ -193,6 +224,7 @@ export const App: React.FC = () => {
     if (window.electronAPI?.disconnect) {
       await window.electronAPI.disconnect();
     }
+    window.electronAPI?.saveAppSettings?.({ lastActiveConnectionId: null });
     setIsConnected(false);
     setActiveConfig(null);
     setSchemaObjects(null);

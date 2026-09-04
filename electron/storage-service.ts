@@ -17,9 +17,19 @@ export interface SavedConnection {
   createdAt?: string;
 }
 
+export interface AppSettings {
+  lastActiveConnectionId?: string | null;
+  autoConnectOnStartup?: boolean;
+}
+
 export class StorageService {
   private configPath: string;
+  private settingsPath: string;
   private connections: SavedConnection[] = [];
+  private settings: AppSettings = {
+    lastActiveConnectionId: null,
+    autoConnectOnStartup: true
+  };
 
   constructor() {
     const userDataPath = app?.getPath('userData') || './data';
@@ -31,7 +41,34 @@ export class StorageService {
       }
     }
     this.configPath = path.join(userDataPath, 'firebird-connections.json');
+    this.settingsPath = path.join(userDataPath, 'app-settings.json');
     this.load();
+    this.loadSettings();
+  }
+
+  private loadSettings(): void {
+    try {
+      if (fs.existsSync(this.settingsPath)) {
+        const raw = fs.readFileSync(this.settingsPath, 'utf-8');
+        this.settings = { ...this.settings, ...JSON.parse(raw) };
+      }
+    } catch (err) {
+      console.error('Error loading app settings:', err);
+    }
+  }
+
+  public getSettings(): AppSettings {
+    return { ...this.settings };
+  }
+
+  public saveSettings(patch: Partial<AppSettings>): AppSettings {
+    this.settings = { ...this.settings, ...patch };
+    try {
+      fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Error saving app settings:', err);
+    }
+    return this.settings;
   }
 
   private load(): void {
