@@ -20,6 +20,16 @@ interface SqlEditorProps {
   onChangeMaxRows: (val: number) => void;
   swapF9F5: boolean;
   onToggleSwap: () => void;
+  schema?: {
+    tables?: string[];
+    views?: string[];
+    procedures?: { name: string; inputs: number; outputs: number; inputParams?: string[] }[];
+    triggers?: { name: string; table: string; inactive: boolean }[];
+    generators?: string[];
+    domains?: string[];
+    exceptions?: string[];
+    columnsByTable?: Record<string, string[]>;
+  } | null;
 }
 
 export const SqlEditor: React.FC<SqlEditorProps> = ({
@@ -30,20 +40,51 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
   maxRows,
   onChangeMaxRows,
   swapF9F5,
-  onToggleSwap
+  onToggleSwap,
+  schema
 }) => {
   const { t } = useTranslation();
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const executeKey = swapF9F5 ? 'F5' : 'F9';
 
+  const schemaRef = useRef(schema);
+  useEffect(() => {
+    schemaRef.current = schema;
+  }, [schema]);
+
+  const completionDisposableRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (completionDisposableRef.current) {
+        completionDisposableRef.current.dispose();
+        completionDisposableRef.current = null;
+      }
+    };
+  }, []);
+
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Custom Firebird SQL Autocompletions
-    monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: (model, position) => {
+    // Custom Firebird SQL Autocompletions with table & column intelligence
+    if (completionDisposableRef.current) {
+      completionDisposableRef.current.dispose();
+    }
+
+    completionDisposableRef.current = monaco.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: ['.'],
+      provideCompletionItems: (model: any, position: any) => {
+        const lineContent = model.getLineContent(position.lineNumber);
+        const textUntilPosition = lineContent.substring(0, position.column - 1);
+
+        const currentSchema = schemaRef.current;
+        const columnsByTable: Record<string, string[]> = currentSchema?.columnsByTable || {};
+
+        // Check if typing after a dot: e.g. "CLIENTES." or "c." or "select CLIENTES.NO"
+        const dotMatch = textUntilPosition.match(/([a-zA-Z0-9_$"']+)\.([a-zA-Z0-9_$"']*)$/);
+
         const word = model.getWordUntilPosition(position);
         const range = {
           startLineNumber: position.lineNumber,
@@ -52,6 +93,50 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           endColumn: word.endColumn
         };
 
+        if (dotMatch) {
+          const rawQualifier = dotMatch[1].replace(/["']/g, '');
+          const qualifierUpper = rawQualifier.toUpperCase();
+
+          // 1. Check if qualifier directly matches a table or view name
+          let matchedTableName = Object.keys(columnsByTable).find(
+            (t) => t.toUpperCase() === qualifierUpper
+          );
+
+          // 2. If not found directly, check if qualifier is an alias in the current SQL query
+          if (!matchedTableName) {
+            const fullText = model.getValue();
+            const escapedQualifier = rawQualifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Regex to find table with alias: FROM/JOIN/UPDATE/INTO/, <table_name> [AS] <qualifier>
+            const aliasRegex = new RegExp(
+              `(?:FROM|JOIN|UPDATE|INTO|,)\\s+([a-zA-Z0-9_$]+)(?:\\s+AS)?\\s+${escapedQualifier}\\b`,
+              'i'
+            );
+            const aliasMatch = fullText.match(aliasRegex);
+            if (aliasMatch) {
+              const candidateTable = aliasMatch[1].toUpperCase();
+              matchedTableName = Object.keys(columnsByTable).find(
+                (t) => t.toUpperCase() === candidateTable
+              );
+            }
+          }
+
+          if (matchedTableName) {
+            const cols = columnsByTable[matchedTableName] || [];
+            const suggestions = cols.map((col: string, idx: number) => ({
+              label: col,
+              kind: monaco.languages.CompletionItemKind.Field,
+              insertText: col,
+              detail: `Campo (${matchedTableName})`,
+              sortText: String(idx).padStart(4, '0'),
+              range
+            }));
+            return { suggestions };
+          }
+
+          return { suggestions: [] };
+        }
+
+        // Default suggestions when not immediately following a dot
         const firebirdKeywords = [
           'SELECT', 'FROM', 'WHERE', 'INSERT INTO', 'UPDATE', 'DELETE', 'JOIN', 'LEFT JOIN',
           'RIGHT JOIN', 'INNER JOIN', 'FULL JOIN', 'GROUP BY', 'ORDER BY', 'HAVING',
@@ -62,17 +147,73 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           'RDB$DATABASE', 'RDB$RELATIONS', 'RDB$RELATION_FIELDS', 'RDB$PROCEDURES',
           'RDB$TRIGGERS', 'RDB$GENERATORS', 'VARCHAR', 'INTEGER', 'SMALLINT', 'BIGINT',
           'DOUBLE PRECISION', 'FLOAT', 'DATE', 'TIME', 'TIMESTAMP', 'BLOB SUB_TYPE TEXT',
-          'PRIMARY KEY', 'FOREIGN KEY', 'REFERENCES', 'NOT NULL', 'DEFAULT', 'UNIQUE'
+          'PRIMARY KEY', 'FOREIGN KEY', 'REFERENCES', 'NOT NULL', 'DEFAULT', 'UNIQUE',
+          'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'LIKE', 'BETWEEN', 'IS NULL', 'IS NOT NULL'
         ];
 
-        const suggestions = firebirdKeywords.map((kw) => ({
+        const keywordSuggestions = firebirdKeywords.map((kw) => ({
           label: kw,
           kind: monaco.languages.CompletionItemKind.Keyword,
           insertText: kw,
           range
         }));
 
-        return { suggestions };
+        const tableSuggestions = (currentSchema?.tables || []).map((tbl: string) => ({
+          label: tbl,
+          kind: monaco.languages.CompletionItemKind.Class,
+          insertText: tbl,
+          detail: 'Tabla',
+          range
+        }));
+
+        const viewSuggestions = (currentSchema?.views || []).map((vw: string) => ({
+          label: vw,
+          kind: monaco.languages.CompletionItemKind.Interface,
+          insertText: vw,
+          detail: 'Vista',
+          range
+        }));
+
+        const procSuggestions = (currentSchema?.procedures || []).map((proc: any) => {
+          const name = typeof proc === 'string' ? proc : proc.name;
+          return {
+            label: name,
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: name,
+            detail: 'Procedimiento',
+            range
+          };
+        });
+
+        // Unique column names across all tables
+        const allColsSet = new Set<string>();
+        if (currentSchema?.columnsByTable) {
+          for (const cols of Object.values(currentSchema.columnsByTable)) {
+            if (Array.isArray(cols)) {
+              for (const col of cols) {
+                allColsSet.add(col);
+              }
+            }
+          }
+        }
+
+        const columnSuggestions = Array.from(allColsSet).map((col) => ({
+          label: col,
+          kind: monaco.languages.CompletionItemKind.Field,
+          insertText: col,
+          detail: 'Campo',
+          range
+        }));
+
+        return {
+          suggestions: [
+            ...tableSuggestions,
+            ...viewSuggestions,
+            ...procSuggestions,
+            ...columnSuggestions,
+            ...keywordSuggestions
+          ]
+        };
       }
     });
 

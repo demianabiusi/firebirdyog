@@ -441,6 +441,7 @@ export class FirebirdService {
     generators: string[];
     domains: string[];
     exceptions: string[];
+    columnsByTable?: Record<string, string[]>;
   }> {
     if (!this.activeDb) {
       throw new Error('No hay conexión activa a la base de datos.');
@@ -514,6 +515,16 @@ export class FirebirdService {
       ORDER BY 1
     `;
 
+    const columnsQuery = `
+      SELECT 
+        TRIM(RF.RDB$RELATION_NAME) AS TABLE_NAME,
+        TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME
+      FROM RDB$RELATION_FIELDS RF
+      JOIN RDB$RELATIONS R ON R.RDB$RELATION_NAME = RF.RDB$RELATION_NAME
+      WHERE (R.RDB$SYSTEM_FLAG = 0 OR R.RDB$SYSTEM_FLAG IS NULL)
+      ORDER BY RF.RDB$RELATION_NAME, RF.RDB$FIELD_POSITION
+    `;
+
     const queryAsync = (sql: string): Promise<any[]> => {
       return new Promise((res, rej) => {
         this.activeDb!.query(sql, [], (err, rows) => {
@@ -524,7 +535,7 @@ export class FirebirdService {
     };
 
     try {
-      const [tables, views, procs, procParams, triggers, gens, domains, exceptions] = await Promise.all([
+      const [tables, views, procs, procParams, triggers, gens, domains, exceptions, colRows] = await Promise.all([
         queryAsync(tablesQuery),
         queryAsync(viewsQuery),
         queryAsync(proceduresQuery),
@@ -532,7 +543,8 @@ export class FirebirdService {
         queryAsync(triggersQuery),
         queryAsync(generatorsQuery),
         queryAsync(domainsQuery),
-        queryAsync(exceptionsQuery)
+        queryAsync(exceptionsQuery),
+        queryAsync(columnsQuery)
       ]);
 
       const paramsByProc: Record<string, string[]> = {};
@@ -542,6 +554,18 @@ export class FirebirdService {
         if (procName && paramName) {
           if (!paramsByProc[procName]) paramsByProc[procName] = [];
           paramsByProc[procName].push(paramName);
+        }
+      }
+
+      const columnsByTable: Record<string, string[]> = {};
+      for (const row of colRows) {
+        const tbl = this.extractString(row, 'TABLE_NAME', 'RDB$RELATION_NAME');
+        const col = this.extractString(row, 'COLUMN_NAME', 'RDB$FIELD_NAME');
+        if (tbl && col) {
+          if (!columnsByTable[tbl]) {
+            columnsByTable[tbl] = [];
+          }
+          columnsByTable[tbl].push(col);
         }
       }
 
@@ -564,7 +588,8 @@ export class FirebirdService {
         })).filter(t => Boolean(t.name)),
         generators: gens.map(r => this.extractString(r, 'NAME', 'RDB$GENERATOR_NAME')).filter(Boolean),
         domains: domains.map(r => this.extractString(r, 'NAME', 'RDB$FIELD_NAME')).filter(Boolean),
-        exceptions: exceptions.map(r => this.extractString(r, 'NAME', 'RDB$EXCEPTION_NAME')).filter(Boolean)
+        exceptions: exceptions.map(r => this.extractString(r, 'NAME', 'RDB$EXCEPTION_NAME')).filter(Boolean),
+        columnsByTable
       };
     } catch (err: any) {
       throw new Error(`Error al consultar metadatos de Firebird: ${err.message}`);

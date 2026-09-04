@@ -106,6 +106,7 @@ export interface ElectronAPI {
     generators: string[];
     domains: string[];
     exceptions: string[];
+    columnsByTable?: Record<string, string[]>;
   }>>;
   getTableDetails: (tableName: string) => Promise<IpcResponse<TableDetails>>;
   getObjectDdl: (type: string, name: string) => Promise<IpcResponse<{ ddl: string; name: string; type: string }>>;

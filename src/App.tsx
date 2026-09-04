@@ -722,6 +722,7 @@ END;
               onChangeMaxRows={setMaxRows}
               swapF9F5={swapF9F5}
               onToggleSwap={handleToggleSwapF9F5}
+              schema={schemaObjects}
             />
           </div>
 
