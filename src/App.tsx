@@ -323,7 +323,7 @@ export const App: React.FC = () => {
     const newTab: QueryTab = {
       id: newId,
       title: `Consulta ${tabs.length + 1}`,
-      sql: 'SELECT * FROM RDB$DATABASE;',
+      sql: '',
       result: null,
       isRunning: false,
       error: null,
