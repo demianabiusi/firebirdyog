@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ConnectionConfig, QueryTab, QueryResult, QueryHistoryItem } from './types';
 import { Navbar } from './components/Navbar';
 import { ObjectTree } from './components/Sidebar/ObjectTree';
@@ -12,6 +12,7 @@ import { TableDesignerModal } from './components/Modals/TableDesignerModal';
 import { DumpDatabaseModal } from './components/Modals/DumpDatabaseModal';
 import { ImportDatabaseModal } from './components/Modals/ImportDatabaseModal';
 import { Database, Plus, Sparkles } from 'lucide-react';
+import { useConnectionWorkspace } from './hooks/useConnectionWorkspace';
 
 const INITIAL_QUERY = `-- Bienvenido a FirebirdYog
 -- Presiona F9 o haz clic en "Ejecutar" para ejecutar consultas
@@ -33,6 +34,9 @@ export const App: React.FC = () => {
   const [isCreateDbModalOpen, setIsCreateDbModalOpen] = useState(false);
   const [isDumpModalOpen, setIsDumpModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  // Workspace persistence
+  const { hydrateWorkspace, saveWorkspaceNow, saveWorkspaceDebounced } = useConnectionWorkspace();
 
   // Table Designer states
   const [isTableDesignerOpen, setIsTableDesignerOpen] = useState(false);
@@ -56,6 +60,16 @@ export const App: React.FC = () => {
   ]);
   const [activeTabId, setActiveTabId] = useState<string>('tab_1');
   const [maxRows, setMaxRows] = useState<number>(1000);
+
+  // Refs so disconnect/save can always read the latest values without stale closures
+  const tabsRef = useRef(tabs);
+  const activeTabIdRef = useRef(activeTabId);
+  const maxRowsRef = useRef(maxRows);
+  const activeConfigRef = useRef(activeConfig);
+  useEffect(() => { tabsRef.current = tabs; }, [tabs]);
+  useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
+  useEffect(() => { maxRowsRef.current = maxRows; }, [maxRows]);
+  useEffect(() => { activeConfigRef.current = activeConfig; }, [activeConfig]);
 
   // Panel resizing states
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -137,6 +151,12 @@ export const App: React.FC = () => {
       setActiveConfig(config);
       setIsConnected(true);
 
+      // Restore this connection's workspace (tabs, activeTab, maxRows)
+      const workspace = hydrateWorkspace(config.id);
+      setTabs(workspace.tabs);
+      setActiveTabId(workspace.activeTabId);
+      setMaxRows(workspace.maxRows);
+
       // Force instant schema retrieval for the new connection
       try {
         const schemaRes = await window.electronAPI.getSchemaObjects();
@@ -153,6 +173,11 @@ export const App: React.FC = () => {
 
   // Disconnect action
   const handleDisconnect = async () => {
+    // Save workspace before clearing state
+    const cfg = activeConfigRef.current;
+    if (cfg) {
+      saveWorkspaceNow(cfg.id, tabsRef.current, activeTabIdRef.current, maxRowsRef.current);
+    }
     if (window.electronAPI?.disconnect) {
       await window.electronAPI.disconnect();
     }
@@ -161,9 +186,13 @@ export const App: React.FC = () => {
     setSchemaObjects(null);
   };
 
-  // Update tab sql
+  // Update tab sql — also debounce-save the workspace
   const handleSqlChange = (newSql: string) => {
-    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, sql: newSql } : t));
+    setTabs(prev => {
+      const next = prev.map(t => t.id === activeTabId ? { ...t, sql: newSql } : t);
+      if (activeConfig) saveWorkspaceDebounced(activeConfig.id, next, activeTabId, maxRows);
+      return next;
+    });
   };
 
   // Execute active query
@@ -283,7 +312,11 @@ export const App: React.FC = () => {
       error: null,
       activeResultTab: 'grid'
     };
-    setTabs(prev => [...prev, newTab]);
+    setTabs(prev => {
+      const next = [...prev, newTab];
+      if (activeConfig) saveWorkspaceDebounced(activeConfig.id, next, newId, maxRows);
+      return next;
+    });
     setActiveTabId(newId);
   };
 
@@ -292,15 +325,19 @@ export const App: React.FC = () => {
     e.stopPropagation();
     if (tabs.length <= 1) return;
     const remaining = tabs.filter(t => t.id !== id);
+    const nextActiveId = activeTabId === id ? remaining[0].id : activeTabId;
     setTabs(remaining);
-    if (activeTabId === id) {
-      setActiveTabId(remaining[0].id);
-    }
+    setActiveTabId(nextActiveId);
+    if (activeConfig) saveWorkspaceNow(activeConfig.id, remaining, nextActiveId, maxRows);
   };
 
   // Rename tab
   const handleRenameTab = (id: string, newTitle: string) => {
-    setTabs(prev => prev.map(t => t.id === id ? { ...t, title: newTitle } : t));
+    setTabs(prev => {
+      const next = prev.map(t => t.id === id ? { ...t, title: newTitle } : t);
+      if (activeConfig) saveWorkspaceDebounced(activeConfig.id, next, activeTabId, maxRows);
+      return next;
+    });
   };
 
   // When clicking on an object from tree
@@ -619,7 +656,10 @@ END;
           <TabBar
             tabs={tabs}
             activeTabId={activeTabId}
-            onSelectTab={(id) => setActiveTabId(id)}
+            onSelectTab={(id) => {
+              setActiveTabId(id);
+              if (activeConfig) saveWorkspaceDebounced(activeConfig.id, tabs, id, maxRows);
+            }}
             onAddTab={handleAddTab}
             onCloseTab={handleCloseTab}
             onRenameTab={handleRenameTab}
