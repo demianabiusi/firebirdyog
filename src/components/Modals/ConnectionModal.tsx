@@ -64,22 +64,44 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; pingMs?: number } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  // Tracks the ID the user last manually selected inside the modal (persists across opens)
+  const lastSelectedIdRef = React.useRef<string | null>(null);
+  // Tracks whether the modal was already open (to avoid resetting selection on connection refresh)
+  const wasOpenRef = React.useRef(false);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      // Modal just opened — pick the smartest default:
+      // 1. Active connection (if any)
+      // 2. Last manually selected connection in a previous modal session
+      // 3. First saved connection
+      // 4. New blank config
+      wasOpenRef.current = true;
       setTestResult(null);
       if (savedConnections.length > 0) {
-        const found = savedConnections.find(c => c.id === activeConfigId) || savedConnections[0];
+        const preferredId = activeConfigId ?? lastSelectedIdRef.current;
+        const found =
+          savedConnections.find(c => c.id === preferredId) ??
+          savedConnections[0];
+        lastSelectedIdRef.current = found.id;
         setSelectedConfig({ ...found });
       } else {
-        setSelectedConfig({ ...DEFAULT_CONFIG, id: 'conn_' + Date.now() });
+        const blank = { ...DEFAULT_CONFIG, id: 'conn_' + Date.now() };
+        lastSelectedIdRef.current = blank.id;
+        setSelectedConfig(blank);
       }
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
     }
-  }, [isOpen, savedConnections, activeConfigId]);
+    // Note: savedConnections intentionally NOT in deps here — we only want to
+    // react to the modal opening, not to background connection list refreshes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activeConfigId]);
 
   if (!isOpen) return null;
 
   const handleSelectExisting = (conn: ConnectionConfig) => {
+    lastSelectedIdRef.current = conn.id;
     setSelectedConfig({ ...conn });
     setTestResult(null);
   };
@@ -225,6 +247,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               <div className="space-y-1.5 max-h-[48vh] overflow-y-auto pr-1">
                 {savedConnections.map((conn) => {
                   const isSelected = selectedConfig.id === conn.id;
+                  const isActive = conn.id === activeConfigId;
                   return (
                     <div
                       key={conn.id}
@@ -238,7 +261,15 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Server className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-400' : 'text-zinc-500'}`} />
                         <div className="truncate">
-                          <div className="text-sm font-medium truncate">{conn.name}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium truncate">{conn.name}</span>
+                            {isActive && (
+                              <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded-full shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                activa
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-zinc-500 truncate">{conn.host}:{conn.port}</div>
                         </div>
                       </div>
