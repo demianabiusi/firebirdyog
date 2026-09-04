@@ -13,13 +13,22 @@ const storageService = new StorageService();
 const dumpService = new DumpService(firebirdService);
 
 function getAppIcon(): NativeImage | string | undefined {
-  const possiblePaths = [
-    path.join(__dirname, '../public/icon.png'),
-    path.join(process.cwd(), 'public/icon.png'),
-    path.join(app.getAppPath(), 'public/icon.png'),
-    path.join(__dirname, '../public/icon.svg'),
-    path.join(process.cwd(), 'public/icon.svg')
-  ];
+  const isWin = process.platform === 'win32';
+
+  const possiblePaths = app.isPackaged
+    ? [
+        // En producción: los íconos están junto al .exe, fuera del .asar
+        path.join(process.resourcesPath, '..', isWin ? 'icon.ico' : 'icon.png'),
+        path.join(path.dirname(app.getPath('exe')), isWin ? 'icon.ico' : 'icon.png'),
+        path.join(process.resourcesPath, isWin ? 'icon.ico' : 'icon.png'),
+      ]
+    : [
+        // En desarrollo: public/
+        path.join(__dirname, '../public', isWin ? 'icon.ico' : 'icon.png'),
+        path.join(process.cwd(), 'public', isWin ? 'icon.ico' : 'icon.png'),
+        path.join(__dirname, '../public/icon.png'),
+        path.join(process.cwd(), 'public/icon.png'),
+      ];
 
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {

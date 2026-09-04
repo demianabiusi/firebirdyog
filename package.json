@@ -20,16 +20,20 @@
   "build": {
     "appId": "com.firebirdyog.app",
     "productName": "FirebirdYog",
+    "icon": "public/icon.png",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "public/icon.ico",
+      "public/icon.png",
       "node_modules/**/*",
       "package.json"
     ],
     "win": {
+      "icon": "public/icon.ico",
       "target": [
         {
           "target": "portable",

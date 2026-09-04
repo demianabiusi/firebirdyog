@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import appIconUrl from '../../public/icon.svg';
 import { ConnectionConfig } from '../types';
 import { useTranslation } from '../i18n/I18nContext';
 import { 
@@ -49,7 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <img 
-            src="/icon.svg" 
+            src={appIconUrl} 
             alt="Firebird Logo" 
             className="w-7 h-7 rounded-lg shadow-md shadow-orange-500/25 hover:scale-105 transition-transform" 
           />
