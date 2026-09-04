@@ -28,7 +28,7 @@ import {
 interface SchemaObjects {
   tables: string[];
   views: string[];
-  procedures: { name: string; inputs: number; outputs: number }[];
+  procedures: { name: string; inputs: number; outputs: number; inputParams?: string[] }[];
   triggers: { name: string; table: string; inactive: boolean }[];
   generators: string[];
   domains: string[];
@@ -48,6 +48,27 @@ interface ObjectTreeProps {
   onCreateView?: () => void;
   onCreateTrigger?: () => void;
   databaseName?: string;
+}
+
+function buildProcedureCall(proc: { name: string; inputs: number; outputs: number; inputParams?: string[] }): { sql: string; hasInputParams: boolean } {
+  const isSelectable = (proc.outputs || 0) > 0;
+  const numInputs = proc.inputs || 0;
+  
+  let argsStr = '';
+  if (numInputs > 0) {
+    if (proc.inputParams && proc.inputParams.length > 0) {
+      argsStr = `(${proc.inputParams.join(', ')})`;
+    } else {
+      const placeholders = Array.from({ length: numInputs }, (_, i) => `:P${i + 1}`);
+      argsStr = `(${placeholders.join(', ')})`;
+    }
+  }
+
+  const sql = isSelectable
+    ? `SELECT * FROM ${proc.name}${argsStr};`
+    : `EXECUTE PROCEDURE ${proc.name}${argsStr ? ` ${argsStr}` : ''};`;
+
+  return { sql, hasInputParams: numInputs > 0 };
 }
 
 type ContextMenuItemType = 
@@ -496,11 +517,8 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                     <div
                       className="flex items-center gap-2 min-w-0 flex-1 truncate"
                       onClick={() => {
-                        if (proc.outputs > 0) {
-                          onSelectObjectSql(`SELECT * FROM ${proc.name};`, false);
-                        } else {
-                          onSelectObjectSql(`EXECUTE PROCEDURE ${proc.name};`, false);
-                        }
+                        const { sql } = buildProcedureCall(proc);
+                        onSelectObjectSql(sql, false);
                       }}
                       onDoubleClick={() => onEditObject('PROCEDURE', proc.name)}
                       title={`Clic: consultar plantilla | Clic derecho: menú contextual`}
@@ -528,11 +546,9 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (proc.outputs > 0) {
-                              onSelectObjectSql(`SELECT * FROM ${proc.name};`, true);
-                            } else {
-                              onSelectObjectSql(`EXECUTE PROCEDURE ${proc.name};`, true);
-                            }
+                            const { sql, hasInputParams } = buildProcedureCall(proc);
+                            // If procedure expects input parameters, don't auto-execute so user can fill them in
+                            onSelectObjectSql(sql, !hasInputParams);
                           }}
                           title="Ejecutar"
                           className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
@@ -950,8 +966,14 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
 
               <button
                 onClick={() => {
-                  const isSelectable = contextMenu.meta?.outputs > 0;
-                  onSelectObjectSql(isSelectable ? `SELECT * FROM ${contextMenu.name};` : `EXECUTE PROCEDURE ${contextMenu.name};`, true);
+                  const meta = contextMenu.meta || { name: contextMenu.name, inputs: 0, outputs: 0 };
+                  const { sql, hasInputParams } = buildProcedureCall({
+                    name: contextMenu.name,
+                    inputs: meta.inputs || 0,
+                    outputs: meta.outputs || 0,
+                    inputParams: meta.inputParams
+                  });
+                  onSelectObjectSql(sql, !hasInputParams);
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-emerald-400 rounded-md text-left transition-colors"
               >

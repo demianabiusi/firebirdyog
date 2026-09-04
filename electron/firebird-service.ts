@@ -436,7 +436,7 @@ export class FirebirdService {
   public async getSchemaObjects(): Promise<{
     tables: string[];
     views: string[];
-    procedures: { name: string; inputs: number; outputs: number }[];
+    procedures: { name: string; inputs: number; outputs: number; inputParams?: string[] }[];
     triggers: { name: string; table: string; inactive: boolean }[];
     generators: string[];
     domains: string[];
@@ -470,6 +470,16 @@ export class FirebirdService {
       FROM RDB$PROCEDURES
       WHERE (RDB$SYSTEM_FLAG = 0 OR RDB$SYSTEM_FLAG IS NULL)
       ORDER BY 1
+    `;
+
+    const procParamsQuery = `
+      SELECT 
+        TRIM(RDB$PROCEDURE_NAME) AS PROC_NAME,
+        TRIM(RDB$PARAMETER_NAME) AS PARAM_NAME,
+        COALESCE(RDB$PARAMETER_NUMBER, 0) AS PARAM_NUM
+      FROM RDB$PROCEDURE_PARAMETERS
+      WHERE RDB$PARAMETER_TYPE = 0
+      ORDER BY RDB$PROCEDURE_NAME, RDB$PARAMETER_NUMBER
     `;
 
     const triggersQuery = `
@@ -514,24 +524,39 @@ export class FirebirdService {
     };
 
     try {
-      const [tables, views, procs, triggers, gens, domains, exceptions] = await Promise.all([
+      const [tables, views, procs, procParams, triggers, gens, domains, exceptions] = await Promise.all([
         queryAsync(tablesQuery),
         queryAsync(viewsQuery),
         queryAsync(proceduresQuery),
+        queryAsync(procParamsQuery),
         queryAsync(triggersQuery),
         queryAsync(generatorsQuery),
         queryAsync(domainsQuery),
         queryAsync(exceptionsQuery)
       ]);
 
+      const paramsByProc: Record<string, string[]> = {};
+      for (const row of procParams) {
+        const procName = this.extractString(row, 'PROC_NAME', 'RDB$PROCEDURE_NAME');
+        const paramName = this.extractString(row, 'PARAM_NAME', 'RDB$PARAMETER_NAME');
+        if (procName && paramName) {
+          if (!paramsByProc[procName]) paramsByProc[procName] = [];
+          paramsByProc[procName].push(paramName);
+        }
+      }
+
       return {
         tables: tables.map(r => this.extractString(r, 'NAME', 'RDB$RELATION_NAME')).filter(Boolean),
         views: views.map(r => this.extractString(r, 'NAME', 'RDB$RELATION_NAME')).filter(Boolean),
-        procedures: procs.map(r => ({
-          name: this.extractString(r, 'NAME', 'RDB$PROCEDURE_NAME'),
-          inputs: this.extractNumber(r, 'INPUTS', 'RDB$PROCEDURE_INPUTS'),
-          outputs: this.extractNumber(r, 'OUTPUTS', 'RDB$PROCEDURE_OUTPUTS')
-        })).filter(p => Boolean(p.name)),
+        procedures: procs.map(r => {
+          const name = this.extractString(r, 'NAME', 'RDB$PROCEDURE_NAME');
+          return {
+            name,
+            inputs: this.extractNumber(r, 'INPUTS', 'RDB$PROCEDURE_INPUTS'),
+            outputs: this.extractNumber(r, 'OUTPUTS', 'RDB$PROCEDURE_OUTPUTS'),
+            inputParams: paramsByProc[name] || []
+          };
+        }).filter(p => Boolean(p.name)),
         triggers: triggers.map(r => ({
           name: this.extractString(r, 'NAME', 'RDB$TRIGGER_NAME'),
           table: this.extractString(r, 'TABLE_NAME', 'RDB$RELATION_NAME'),

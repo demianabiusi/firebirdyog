@@ -101,7 +101,7 @@ export interface ElectronAPI {
   getSchemaObjects: () => Promise<IpcResponse<{
     tables: string[];
     views: string[];
-    procedures: { name: string; inputs: number; outputs: number }[];
+    procedures: { name: string; inputs: number; outputs: number; inputParams?: string[] }[];
     triggers: { name: string; table: string; inactive: boolean }[];
     generators: string[];
     domains: string[];
