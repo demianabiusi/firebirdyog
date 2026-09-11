@@ -144,6 +144,97 @@ export interface ElectronAPI {
   startImport: (options: ImportOptions) => Promise<IpcResponse<ImportResult>>;
   cancelImport: () => Promise<{ success: boolean }>;
   onImportProgress: (callback: (progress: ImportProgress) => void) => () => void;
+
+  // Database Compare & Synchronization
+  startCompare: (options: CompareOptions) => Promise<IpcResponse<CompareResult>>;
+  cancelCompare: () => Promise<{ success: boolean }>;
+  generateMigrationScript: (selectedItems: CompareDiffItem[], sourceName: string, targetName: string) => Promise<IpcResponse<string>>;
+  executeMigration: (targetConfig: ConnectionConfig, script: string) => Promise<IpcResponse<MigrationExecutionResult>>;
+  onCompareProgress: (callback: (progress: CompareProgress) => void) => () => void;
+  onMigrationProgress: (callback: (progress: { executed: number; total: number }) => void) => () => void;
+}
+
+export type CompareItemCategory = 
+  | 'DOMAIN'
+  | 'GENERATOR'
+  | 'TABLE'
+  | 'COLUMN'
+  | 'PRIMARY_KEY'
+  | 'FOREIGN_KEY'
+  | 'VIEW'
+  | 'PROCEDURE'
+  | 'TRIGGER'
+  | 'EXCEPTION'
+  | 'DATA';
+
+export type CompareItemStatus = 
+  | 'EQUAL'
+  | 'MISSING_IN_TARGET'
+  | 'DIFFERENT'
+  | 'MISSING_IN_SOURCE';
+
+export interface CompareDiffItem {
+  id: string;
+  category: CompareItemCategory;
+  objectName: string;
+  parentTable?: string;
+  status: CompareItemStatus;
+  description: string;
+  sourceValue?: string;
+  targetValue?: string;
+  migrationSql: string;
+  canMigrate: boolean;
+  selected: boolean;
+  dataDiff?: {
+    sourceRows: number;
+    targetRows: number;
+    missingInTargetCount: number;
+    differingCount: number;
+    extraInTargetCount: number;
+  };
+}
+
+export interface CompareOptions {
+  sourceConfig: ConnectionConfig;
+  targetConfig: ConnectionConfig;
+  compareMetadata: boolean;
+  compareData: boolean;
+  maxDataRowsPerTable?: number;
+  selectedTables?: string[];
+}
+
+export interface CompareProgress {
+  stage: string;
+  percentage: number;
+  message: string;
+  currentTable?: string;
+}
+
+export interface CompareSummary {
+  totalItems: number;
+  equalCount: number;
+  missingInTargetCount: number;
+  differentCount: number;
+  missingInSourceCount: number;
+  dataDiffCount: number;
+}
+
+export interface CompareResult {
+  success: boolean;
+  sourceDatabase: string;
+  targetDatabase: string;
+  summary: CompareSummary;
+  items: CompareDiffItem[];
+  durationMs: number;
+  error?: string;
+}
+
+export interface MigrationExecutionResult {
+  success: boolean;
+  statementsExecuted: number;
+  errorsCount: number;
+  errors: { statementSnippet: string; error: string }[];
+  durationMs: number;
 }
 
 export interface DumpOptions {

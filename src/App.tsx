@@ -11,6 +11,7 @@ import { CreateDatabaseModal } from './components/Modals/CreateDatabaseModal';
 import { TableDesignerModal } from './components/Modals/TableDesignerModal';
 import { DumpDatabaseModal } from './components/Modals/DumpDatabaseModal';
 import { ImportDatabaseModal } from './components/Modals/ImportDatabaseModal';
+import { CompareDatabaseModal } from './components/Modals/CompareDatabaseModal';
 import { Database, Plus, Sparkles } from 'lucide-react';
 import { useConnectionWorkspace } from './hooks/useConnectionWorkspace';
 
@@ -34,6 +35,7 @@ export const App: React.FC = () => {
   const [isCreateDbModalOpen, setIsCreateDbModalOpen] = useState(false);
   const [isDumpModalOpen, setIsDumpModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Workspace persistence
   const { hydrateWorkspace, saveWorkspaceNow, saveWorkspaceDebounced } = useConnectionWorkspace();
@@ -648,6 +650,7 @@ END;
         onOpenCreateDbModal={() => setIsCreateDbModalOpen(true)}
         onOpenDumpModal={() => setIsDumpModalOpen(true)}
         onOpenImportModal={() => setIsImportModalOpen(true)}
+        onOpenCompareModal={() => setIsCompareModalOpen(true)}
         onDisconnect={handleDisconnect}
         onNewQuery={handleAddTab}
       />
@@ -842,6 +845,15 @@ END;
         onClose={() => setIsImportModalOpen(false)}
         onSuccess={() => refreshSchema()}
         databaseName={activeConfig?.database}
+      />
+
+      {/* Database Compare & Migration Modal */}
+      <CompareDatabaseModal
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        savedConnections={savedConnections}
+        activeConfig={activeConfig}
+        onOpenInSqlEditor={handleOpenInSqlEditor}
       />
 
     </div>

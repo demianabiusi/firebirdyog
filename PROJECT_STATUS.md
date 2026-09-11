@@ -39,7 +39,23 @@
 - Grilla de resultados virtualizada con copiado al portapapeles, visor de celdas/BLOBs y exportación a CSV, JSON y SQL INSERT.
 - Herramienta visual de Dump y Restauración de base de datos.
 
-### E. Preparación para Publicación Open Source
+### E. Comparador y Sincronizador de Bases de Datos (Schema & Data Diff)
+- **Comparación Origen vs Destino:** Permite seleccionar 2 bases de datos guardadas (o la activa), intercambiarlas y ejecutar un análisis exhaustivo.
+- **Validación de Metadatos:**
+  - Tablas, Columnas (agregadas, eliminadas, tipos de datos modificados).
+  - Claves Primarias y Foráneas (Foreign Keys).
+  - Vistas, Procedimientos Almacenados y Triggers (análisis y diff de código/DDL).
+  - Generadores / Secuencias y sus valores actuales (`GEN_ID`).
+  - Dominios y Excepciones.
+- **Validación de Datos:**
+  - Detección de registros faltantes en destino para `INSERT`.
+  - Detección de registros modificados para `UPDATE`.
+  - Límite de filas configurable para diff registro a registro seguro en memoria.
+- **Generador de Script de Sincronización SQL:**
+  - Genera script SQL ordenado por dependencias para Firebird Dialecto 3 (Dominios -> Generadores -> Tablas -> Columnas -> PKs -> Datos con COMMIT por lotes -> FKs -> Vistas -> SPs -> Triggers).
+  - Visor con Monaco Editor, opciones para copiar, guardar como `.sql`, abrir directamente en pestaña de consulta o ejecutar en la base destino.
+
+### F. Preparación para Publicación Open Source
 - **Licencia:** MIT (archivo `LICENSE` a nombre de Demian Abiusi).
 - **README.md:** Rediseñado completamente con propuesta de valor, capturas, guía de características y de compilación.
 - **CI/CD con GitHub Actions:** Creado `.github/workflows/release.yml` para compilar automáticamente el `.exe` portable de Windows al crear un tag (ej: `v1.0.0`) o disparar el workflow manualmente.

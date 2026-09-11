@@ -44,5 +44,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on('fb:import-progress', handler);
     return () => ipcRenderer.removeListener('fb:import-progress', handler);
+  },
+
+  // Database Compare & Synchronization
+  startCompare: (options: any) => ipcRenderer.invoke('fb:start-compare', options),
+  cancelCompare: () => ipcRenderer.invoke('fb:cancel-compare'),
+  generateMigrationScript: (selectedItems: any[], sourceName: string, targetName: string) => 
+    ipcRenderer.invoke('fb:generate-migration-script', selectedItems, sourceName, targetName),
+  executeMigration: (targetConfig: any, script: string) => 
+    ipcRenderer.invoke('fb:execute-migration', targetConfig, script),
+  onCompareProgress: (callback: (progress: any) => void) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on('fb:compare-progress', handler);
+    return () => ipcRenderer.removeListener('fb:compare-progress', handler);
+  },
+  onMigrationProgress: (callback: (progress: any) => void) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on('fb:migration-progress', handler);
+    return () => ipcRenderer.removeListener('fb:migration-progress', handler);
   }
 });

@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { FirebirdService } from './firebird-service';
 import { StorageService } from './storage-service';
 import { DumpService, DumpOptions, DumpProgress } from './dump-service';
+import { CompareService, CompareOptions, CompareProgress } from './compare-service';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
@@ -11,6 +12,7 @@ let mainWindow: BrowserWindow | null = null;
 const firebirdService = new FirebirdService();
 const storageService = new StorageService();
 const dumpService = new DumpService(firebirdService);
+const compareService = new CompareService();
 
 interface WindowState {
   x?: number;
@@ -480,5 +482,47 @@ ipcMain.handle('dialog:select-import-file', async () => {
   const stat = fs.statSync(filePath);
   return { filePath, size: stat.size, name: path.basename(filePath) };
 });
+
+// IPC: Database Comparison & Synchronization
+ipcMain.handle('fb:start-compare', async (_, options: CompareOptions) => {
+  try {
+    const res = await compareService.compareDatabases(options, (progress: CompareProgress) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('fb:compare-progress', progress);
+      }
+    });
+    return { success: res.success, data: res, error: res.error };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al comparar las bases de datos' };
+  }
+});
+
+ipcMain.handle('fb:cancel-compare', async () => {
+  compareService.cancel();
+  return { success: true };
+});
+
+ipcMain.handle('fb:generate-migration-script', async (_, selectedItems: any[], sourceName: string, targetName: string) => {
+  try {
+    const script = compareService.generateMigrationScript(selectedItems, sourceName, targetName);
+    return { success: true, data: script };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al generar el script de migración' };
+  }
+});
+
+ipcMain.handle('fb:execute-migration', async (_, targetConfig: any, script: string) => {
+  try {
+    const res = await compareService.executeMigration(targetConfig, script, (progress: any) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('fb:migration-progress', progress);
+      }
+    });
+    return { success: res.success, data: res };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al ejecutar migración' };
+  }
+});
+
 
 

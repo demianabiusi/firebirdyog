@@ -49,6 +49,17 @@ En el ecosistema de Firebird SQL (ampliamente utilizado en sistemas ERP, factura
 - **Visor BLOB / Textos Largos:** Doble clic en una celda para abrir el visor dedicado para textos extensos o JSON.
 - **Exportación directa:** Exporta los resultados seleccionados o completos a **CSV**, **JSON** o sentencias **SQL INSERT**.
 
+### 🔄 Comparador y Sincronizador de Bases de Datos (Schema & Data Diff)
+- **Comparación Visual Origen vs Destino:** Selecciona dos bases de datos guardadas para contrastar diferencias estructurales y de datos al estilo SQLyog.
+- **Diff Completo de Metadatos:**
+  - Tablas, Columnas (agregadas, eliminadas o con tipo de dato modificado).
+  - Claves Primarias y Foráneas (Foreign Keys).
+  - Vistas, Procedimientos Almacenados y Triggers.
+  - Generadores / Secuencias y sincronización de valores actuales (`GEN_ID`).
+  - Dominios y Excepciones.
+- **Sincronización de Datos:** Identifica filas faltantes para generar `INSERT`s y registros modificados para generar `UPDATE`s (con clave primaria).
+- **Generación de Script de Migración:** Produce scripts SQL limpios y ordenados por dependencias para Firebird Dialecto 3, listos para copiar, guardar como `.sql`, abrir en el editor o ejecutar directamente en la base de destino.
+
 ### 💾 Persistencia Total del Entorno
 - **Memoria por Conexión:** Cada base de datos recuerda sus propias pestañas abiertas, sus consultas escritas, el historial y la configuración de registros a mostrar (`maxRows`).
 - **Estado de la Ventana:** Recuerda tamaño, posición en pantalla y si la ventana estaba maximizada.

@@ -14,7 +14,8 @@ import {
   Download,
   Upload,
   Globe,
-  ChevronDown
+  ChevronDown,
+  GitCompare
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -24,6 +25,7 @@ interface NavbarProps {
   onOpenCreateDbModal: () => void;
   onOpenDumpModal?: () => void;
   onOpenImportModal?: () => void;
+  onOpenCompareModal?: () => void;
   onDisconnect: () => void;
   onNewQuery: () => void;
 }
@@ -35,6 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCreateDbModal,
   onOpenDumpModal,
   onOpenImportModal,
+  onOpenCompareModal,
   onDisconnect,
   onNewQuery
 }) => {
@@ -97,6 +100,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Upload className="w-3.5 h-3.5 text-blue-400" />
             <span>{t('navbar.importSql')}</span>
+          </button>
+        )}
+
+        {/* Compare Databases Action */}
+        {onOpenCompareModal && (
+          <button
+            onClick={onOpenCompareModal}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-purple-300 hover:text-purple-200 text-xs rounded border border-zinc-800 hover:border-purple-500/30 transition-colors"
+            title={t('navbar.compareDbTooltip')}
+          >
+            <GitCompare className="w-3.5 h-3.5 text-purple-400" />
+            <span>{t('navbar.compareDb')}</span>
           </button>
         )}
       </div>
