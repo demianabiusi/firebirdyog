@@ -282,5 +282,35 @@
     "targetValue": "Target Definition",
     "migrationSql": "Target Migration SQL",
     "activeConnection": "Active Connection"
+  },
+  "ssh": {
+    "tabTitle": "SSH Tunnel",
+    "generalTab": "General",
+    "enableSsh": "Use SSH tunnel for this connection",
+    "enableSshDesc": "Enables connecting to remote or isolated Firebird databases through a secure SSH bastion.",
+    "sshHost": "SSH Server (Host or IP)",
+    "sshPort": "SSH Port",
+    "sshUser": "SSH Username",
+    "authMethod": "Authentication Method",
+    "authPassword": "Password",
+    "authKey": "Private Key",
+    "sshPassword": "SSH Password",
+    "privateKeyPath": "Private Key File",
+    "browseKey": "Browse...",
+    "passphrase": "Passphrase (optional)",
+    "testSsh": "Test SSH Tunnel",
+    "testingSsh": "Testing SSH connection...",
+    "sshSuccess": "SSH server connection established successfully!",
+    "sshHint": "Note: Through the SSH tunnel, the DB host in 'General' tab is usually 127.0.0.1 if Firebird is running on the SSH server itself.",
+    "badge": "SSH",
+    "activeBadge": "Tunnel Active",
+    "inactiveBadge": "No Tunnel"
+  },
+  "theme": {
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme"
   }
 }

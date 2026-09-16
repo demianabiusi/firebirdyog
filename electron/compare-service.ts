@@ -1,5 +1,6 @@
 import * as FirebirdRaw from 'node-firebird';
 import type FirebirdType from 'node-firebird';
+import { SshTunnelConfig, SshTunnelInstance, sshTunnelService } from './ssh-tunnel-service';
 
 // Resolve CommonJS / ESM interop for node-firebird
 const Firebird: typeof FirebirdType = ((FirebirdRaw as any).attach 
@@ -16,6 +17,7 @@ export interface DbConnectionOptions {
   password?: string;
   role?: string;
   charset?: string;
+  ssh?: SshTunnelConfig;
 }
 
 export type CompareItemCategory = 
@@ -114,11 +116,14 @@ export class CompareService {
     return raw;
   }
 
-  private attachDb(config: DbConnectionOptions): Promise<FirebirdType.Database> {
+  private attachDb(config: DbConnectionOptions, tunnel?: SshTunnelInstance | null): Promise<FirebirdType.Database> {
     return new Promise((resolve, reject) => {
+      const host = tunnel ? tunnel.localHost : (config.host || '127.0.0.1');
+      const port = tunnel ? tunnel.localPort : (Number(config.port) || 3050);
+
       const fbOptions: FirebirdType.Options = {
-        host: config.host || '127.0.0.1',
-        port: Number(config.port) || 3050,
+        host,
+        port,
         database: config.database,
         user: config.user || 'SYSDBA',
         password: config.password || 'masterkey',
@@ -735,6 +740,8 @@ export class CompareService {
 
     let sourceDb: FirebirdType.Database | null = null;
     let targetDb: FirebirdType.Database | null = null;
+    let sourceTunnel: SshTunnelInstance | null = null;
+    let targetTunnel: SshTunnelInstance | null = null;
 
     const items: CompareDiffItem[] = [];
 
@@ -745,7 +752,14 @@ export class CompareService {
         percentage: 5,
         message: `Conectando a la base de datos de origen (${options.sourceConfig.name || options.sourceConfig.database})...`
       });
-      sourceDb = await this.attachDb(options.sourceConfig);
+      if (options.sourceConfig.ssh?.enabled) {
+        sourceTunnel = await sshTunnelService.createTunnel(
+          options.sourceConfig.ssh,
+          options.sourceConfig.host || '127.0.0.1',
+          Number(options.sourceConfig.port) || 3050
+        );
+      }
+      sourceDb = await this.attachDb(options.sourceConfig, sourceTunnel);
 
       // 2. Connect to Target
       onProgress({
@@ -753,7 +767,14 @@ export class CompareService {
         percentage: 10,
         message: `Conectando a la base de datos de destino (${options.targetConfig.name || options.targetConfig.database})...`
       });
-      targetDb = await this.attachDb(options.targetConfig);
+      if (options.targetConfig.ssh?.enabled) {
+        targetTunnel = await sshTunnelService.createTunnel(
+          options.targetConfig.ssh,
+          options.targetConfig.host || '127.0.0.1',
+          Number(options.targetConfig.port) || 3050
+        );
+      }
+      targetDb = await this.attachDb(options.targetConfig, targetTunnel);
 
       if (this.isCancelled) throw new Error('Comparación cancelada.');
 
@@ -1696,7 +1717,9 @@ export class CompareService {
     } finally {
       await Promise.all([
         this.detachDb(sourceDb),
-        this.detachDb(targetDb)
+        this.detachDb(targetDb),
+        sourceTunnel ? sourceTunnel.close() : Promise.resolve(),
+        targetTunnel ? targetTunnel.close() : Promise.resolve()
       ]);
     }
   }
@@ -1769,11 +1792,19 @@ export class CompareService {
   ): Promise<MigrationExecutionResult> {
     const startTime = Date.now();
     let db: FirebirdType.Database | null = null;
+    let tunnel: SshTunnelInstance | null = null;
     const errors: { statementSnippet: string; error: string }[] = [];
     let statementsExecuted = 0;
 
     try {
-      db = await this.attachDb(targetConfig);
+      if (targetConfig.ssh?.enabled) {
+        tunnel = await sshTunnelService.createTunnel(
+          targetConfig.ssh,
+          targetConfig.host || '127.0.0.1',
+          Number(targetConfig.port) || 3050
+        );
+      }
+      db = await this.attachDb(targetConfig, tunnel);
 
       // Clean statements
       const cleanScript = script.replace(/SET\s+SQL\s+DIALECT\s+\d+\s*;?/gi, '').replace(/SET\s+NAMES\s+\w+\s*;?/gi, '');
@@ -1826,6 +1857,13 @@ export class CompareService {
       };
     } finally {
       await this.detachDb(db);
+      if (tunnel) {
+        try {
+          await tunnel.close();
+        } catch (closeErr) {
+          console.warn('Error closing migration SSH tunnel:', closeErr);
+        }
+      }
     }
   }
 }

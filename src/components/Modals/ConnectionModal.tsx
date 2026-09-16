@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ConnectionConfig } from '../../types';
+import { ConnectionConfig, SshTunnelConfig } from '../../types';
+import { useTranslation } from '../../i18n/I18nContext';
 import { 
   Database, 
   Server, 
@@ -14,7 +15,10 @@ import {
   Lock,
   User,
   Layers,
-  Globe
+  Globe,
+  Terminal,
+  Key,
+  ShieldCheck
 } from 'lucide-react';
 
 interface ConnectionModalProps {
@@ -37,7 +41,17 @@ const DEFAULT_CONFIG: ConnectionConfig = {
   password: 'masterkey',
   role: '',
   charset: 'UTF8',
-  dialect: 3
+  dialect: 3,
+  ssh: {
+    enabled: false,
+    host: '',
+    port: 22,
+    user: '',
+    authType: 'password',
+    password: '',
+    privateKeyPath: '',
+    passphrase: ''
+  }
 };
 
 const COMMON_CHARSETS = [
@@ -53,6 +67,29 @@ const COMMON_CHARSETS = [
   'WIN1251'
 ];
 
+const ensureSshConfig = (cfg: ConnectionConfig): ConnectionConfig => ({
+  ...cfg,
+  ssh: cfg.ssh ? {
+    enabled: Boolean(cfg.ssh.enabled),
+    host: cfg.ssh.host || '',
+    port: Number(cfg.ssh.port) || 22,
+    user: cfg.ssh.user || '',
+    authType: cfg.ssh.authType || 'password',
+    password: cfg.ssh.password || '',
+    privateKeyPath: cfg.ssh.privateKeyPath || '',
+    passphrase: cfg.ssh.passphrase || ''
+  } : {
+    enabled: false,
+    host: '',
+    port: 22,
+    user: '',
+    authType: 'password',
+    password: '',
+    privateKeyPath: '',
+    passphrase: ''
+  }
+});
+
 export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   isOpen,
   onClose,
@@ -62,12 +99,17 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   onOpenCreateModal,
   activeConfigId
 }) => {
+  const { t } = useTranslation();
   const [selectedConfig, setSelectedConfig] = useState<ConnectionConfig>(DEFAULT_CONFIG);
+  const [activeTab, setActiveTab] = useState<'general' | 'ssh'>('general');
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; pingMs?: number } | null>(null);
+  const [isTestingSsh, setIsTestingSsh] = useState(false);
+  const [sshTestResult, setSshTestResult] = useState<{ success: boolean; message: string; pingMs?: number } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [autoConnectOnStartup, setAutoConnectOnStartup] = useState(true);
+
   // Tracks the ID the user last manually selected inside the modal (persists across opens)
   const lastSelectedIdRef = React.useRef<string | null>(null);
   // Tracks whether the modal was already open (to avoid resetting selection on connection refresh)
@@ -85,39 +127,64 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
 
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
-      // Modal just opened — pick the smartest default:
-      // 1. Active connection (if any)
-      // 2. Last manually selected connection in a previous modal session
-      // 3. First saved connection
-      // 4. New blank config
       wasOpenRef.current = true;
       setTestResult(null);
+      setSshTestResult(null);
+      setActiveTab('general');
       if (savedConnections.length > 0) {
         const preferredId = activeConfigId ?? lastSelectedIdRef.current;
         const found =
           savedConnections.find(c => c.id === preferredId) ??
           savedConnections[0];
         lastSelectedIdRef.current = found.id;
-        setSelectedConfig({ ...found });
+        setSelectedConfig(ensureSshConfig(found));
       } else {
         const blank = { ...DEFAULT_CONFIG, id: 'conn_' + Date.now() };
         lastSelectedIdRef.current = blank.id;
-        setSelectedConfig(blank);
+        setSelectedConfig(ensureSshConfig(blank));
       }
     } else if (!isOpen) {
       wasOpenRef.current = false;
     }
-    // Note: savedConnections intentionally NOT in deps here — we only want to
-    // react to the modal opening, not to background connection list refreshes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, activeConfigId]);
 
   if (!isOpen) return null;
 
+  const sshConfig = selectedConfig.ssh || {
+    enabled: false,
+    host: '',
+    port: 22,
+    user: '',
+    authType: 'password',
+    password: '',
+    privateKeyPath: '',
+    passphrase: ''
+  };
+
+  const updateSshConfig = (patch: Partial<SshTunnelConfig>) => {
+    setSelectedConfig(prev => ({
+      ...prev,
+      ssh: {
+        ...(prev.ssh || {
+          enabled: false,
+          host: '',
+          port: 22,
+          user: '',
+          authType: 'password',
+          password: '',
+          privateKeyPath: '',
+          passphrase: ''
+        }),
+        ...patch
+      }
+    }));
+  };
+
   const handleSelectExisting = (conn: ConnectionConfig) => {
     lastSelectedIdRef.current = conn.id;
-    setSelectedConfig({ ...conn });
+    setSelectedConfig(ensureSshConfig(conn));
     setTestResult(null);
+    setSshTestResult(null);
   };
 
   const handleAddNew = () => {
@@ -126,8 +193,10 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       id: 'conn_' + Date.now(),
       name: `Conexión ${savedConnections.length + 1}`
     };
-    setSelectedConfig(newConn);
+    setSelectedConfig(ensureSshConfig(newConn));
     setTestResult(null);
+    setSshTestResult(null);
+    setActiveTab('general');
   };
 
   const handleBrowseFile = async () => {
@@ -136,6 +205,44 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       if (file) {
         setSelectedConfig(prev => ({ ...prev, database: file }));
       }
+    }
+  };
+
+  const handleBrowseSshKey = async () => {
+    if (window.electronAPI?.selectSshKeyFile) {
+      const file = await window.electronAPI.selectSshKeyFile();
+      if (file) {
+        updateSshConfig({ privateKeyPath: file });
+      }
+    }
+  };
+
+  const handleTestSsh = async () => {
+    setIsTestingSsh(true);
+    setSshTestResult(null);
+    try {
+      if (window.electronAPI?.testSshConnection) {
+        const res = await window.electronAPI.testSshConnection(sshConfig);
+        if (res.success && res.data) {
+          setSshTestResult({
+            success: true,
+            message: res.data.message,
+            pingMs: res.data.pingMs
+          });
+        } else {
+          setSshTestResult({
+            success: false,
+            message: res.error || 'Fallo de conexión al servidor SSH.'
+          });
+        }
+      }
+    } catch (err: any) {
+      setSshTestResult({
+        success: false,
+        message: err.message || 'Error inesperado al probar conexión SSH.'
+      });
+    } finally {
+      setIsTestingSsh(false);
     }
   };
 
@@ -230,7 +337,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-semibold text-zinc-100">Gestor de Conexiones Firebird</h2>
-              <p className="text-xs text-zinc-400">Configura y administra tus bases de datos Firebird (2.5 / 3.0 / 4.0 / 5.0)</p>
+              <p className="text-xs text-zinc-400">Configura y administra tus bases de datos Firebird (2.5 / 3.0 / 4.0 / 5.0) con soporte para túneles SSH</p>
             </div>
           </div>
           <button 
@@ -262,6 +369,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 {savedConnections.map((conn) => {
                   const isSelected = selectedConfig.id === conn.id;
                   const isActive = conn.id === activeConfigId;
+                  const hasSsh = Boolean(conn.ssh?.enabled);
                   return (
                     <div
                       key={conn.id}
@@ -284,7 +392,17 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-zinc-500 truncate">{conn.host}:{conn.port}</div>
+                          <div className="text-xs text-zinc-500 flex items-center gap-1.5 truncate">
+                            <span>{conn.host}:{conn.port}</span>
+                            {hasSsh && (
+                              <span 
+                                className="text-[9px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1 py-0.2 rounded font-mono shrink-0"
+                                title={`Túnel SSH: ${conn.ssh?.user}@${conn.ssh?.host}:${conn.ssh?.port || 22}`}
+                              >
+                                SSH
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -316,7 +434,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 </button>
               )}
               <div className="text-[11px] text-zinc-500 text-center">
-                Firebird Client v1.0 • Pure Wire Protocol
+                Firebird Client v1.0 • Pure Wire Protocol + SSH Tunnel
               </div>
             </div>
           </div>
@@ -324,151 +442,441 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
           {/* Right: Form Configuration */}
           <div className="flex-1 p-6 overflow-y-auto space-y-4">
             
-            {/* Profile Name */}
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">Nombre de la Conexión</label>
-              <input
-                type="text"
-                value={selectedConfig.name}
-                onChange={(e) => setSelectedConfig({ ...selectedConfig, name: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
-                placeholder="Ej: Producción, Mi BD Local..."
-              />
+            {/* Tabs Selector: General / Túnel SSH */}
+            <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('general')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  activeTab === 'general'
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <Server className="w-3.5 h-3.5" />
+                <span>{t('ssh.generalTab')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('ssh')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  activeTab === 'ssh'
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>{t('ssh.tabTitle')}</span>
+                {sshConfig.enabled ? (
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded-full flex items-center gap-1 font-mono">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    {t('ssh.activeBadge')}
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.2 rounded-full font-mono">
+                    Off
+                  </span>
+                )}
+              </button>
             </div>
 
-            {/* Host & Port */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                  <Server className="w-3.5 h-3.5 text-zinc-400" /> Host / Dirección IP
-                </label>
-                <input
-                  type="text"
-                  value={selectedConfig.host}
-                  onChange={(e) => setSelectedConfig({ ...selectedConfig, host: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
-                  placeholder="127.0.0.1 o nombre de servidor"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1">Puerto</label>
-                <input
-                  type="number"
-                  value={selectedConfig.port}
-                  onChange={(e) => setSelectedConfig({ ...selectedConfig, port: parseInt(e.target.value) || 3050 })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
-                  placeholder="3050"
-                />
-              </div>
-            </div>
-
-            {/* Database Path / Alias */}
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <Database className="w-3.5 h-3.5 text-zinc-400" /> Ruta de la Base de Datos (.fdb / .gdb) o Alias
-                </span>
-                <span className="text-[11px] text-zinc-500">Ruta local o remota en el servidor</span>
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={selectedConfig.database}
-                  onChange={(e) => setSelectedConfig({ ...selectedConfig, database: e.target.value })}
-                  className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
-                  placeholder="/var/lib/firebird/data/test.fdb o C:\db\emp.fdb"
-                />
-                <button
-                  type="button"
-                  onClick={handleBrowseFile}
-                  title="Examinar archivo local"
-                  className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg flex items-center gap-1.5 text-xs transition-colors"
-                >
-                  <FolderOpen className="w-4 h-4 text-amber-400" />
-                  Examinar
-                </button>
-              </div>
-            </div>
-
-            {/* User & Password */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                  <User className="w-3.5 h-3.5 text-zinc-400" /> Usuario
-                </label>
-                <input
-                  type="text"
-                  value={selectedConfig.user}
-                  onChange={(e) => setSelectedConfig({ ...selectedConfig, user: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
-                  placeholder="SYSDBA"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-zinc-400" /> Contraseña
-                </label>
-                <input
-                  type="password"
-                  value={selectedConfig.password || ''}
-                  onChange={(e) => setSelectedConfig({ ...selectedConfig, password: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
-                  placeholder="masterkey"
-                />
-              </div>
-            </div>
-
-            {/* Role, Charset & Dialect */}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5 text-zinc-400" /> Rol (Opcional)
-                </label>
-                <input
-                  type="text"
-                  value={selectedConfig.role || ''}
-                  onChange={(e) => setSelectedConfig({ ...selectedConfig, role: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                  placeholder="RDB$ADMIN"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
-                  <Globe className="w-3.5 h-3.5 text-zinc-400" /> Charset
-                </label>
-                <div className="relative">
+            {/* Tab: General Settings */}
+            {activeTab === 'general' && (
+              <div className="space-y-4 animate-in fade-in duration-150">
+                {/* Profile Name */}
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300 mb-1">Nombre de la Conexión</label>
                   <input
                     type="text"
-                    list="charset-suggestions"
-                    value={selectedConfig.charset || ''}
-                    onChange={(e) => setSelectedConfig({ ...selectedConfig, charset: e.target.value.toUpperCase() })}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                    placeholder="UTF8"
+                    value={selectedConfig.name}
+                    onChange={(e) => setSelectedConfig({ ...selectedConfig, name: e.target.value })}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+                    placeholder="Ej: Producción, Mi BD Local..."
                   />
-                  <datalist id="charset-suggestions">
-                    {COMMON_CHARSETS.map((cs) => (
-                      <option key={cs} value={cs} />
-                    ))}
-                  </datalist>
+                </div>
+
+                {/* Host & Port */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Server className="w-3.5 h-3.5 text-zinc-400" /> Host / Dirección IP
+                      </span>
+                      {sshConfig.enabled && (
+                        <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded font-mono">
+                          vía Túnel SSH
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedConfig.host}
+                      onChange={(e) => setSelectedConfig({ ...selectedConfig, host: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                      placeholder="127.0.0.1 o nombre de servidor"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1">Puerto</label>
+                    <input
+                      type="number"
+                      value={selectedConfig.port}
+                      onChange={(e) => setSelectedConfig({ ...selectedConfig, port: parseInt(e.target.value) || 3050 })}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                      placeholder="3050"
+                    />
+                  </div>
+                </div>
+
+                {/* Database Path / Alias */}
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Database className="w-3.5 h-3.5 text-zinc-400" /> Ruta de la Base de Datos (.fdb / .gdb) o Alias
+                    </span>
+                    <span className="text-[11px] text-zinc-500">Ruta local o remota en el servidor</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={selectedConfig.database}
+                      onChange={(e) => setSelectedConfig({ ...selectedConfig, database: e.target.value })}
+                      className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                      placeholder="/var/lib/firebird/data/test.fdb o C:\db\emp.fdb"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleBrowseFile}
+                      title="Examinar archivo local"
+                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg flex items-center gap-1.5 text-xs transition-colors"
+                    >
+                      <FolderOpen className="w-4 h-4 text-amber-400" />
+                      Examinar
+                    </button>
+                  </div>
+                </div>
+
+                {/* User & Password */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
+                      <User className="w-3.5 h-3.5 text-zinc-400" /> Usuario
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedConfig.user}
+                      onChange={(e) => setSelectedConfig({ ...selectedConfig, user: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                      placeholder="SYSDBA"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5 text-zinc-400" /> Contraseña
+                    </label>
+                    <input
+                      type="password"
+                      value={selectedConfig.password || ''}
+                      onChange={(e) => setSelectedConfig({ ...selectedConfig, password: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                      placeholder="masterkey"
+                    />
+                  </div>
+                </div>
+
+                {/* Role, Charset & Dialect */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5 text-zinc-400" /> Rol (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedConfig.role || ''}
+                      onChange={(e) => setSelectedConfig({ ...selectedConfig, role: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                      placeholder="RDB$ADMIN"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
+                      <Globe className="w-3.5 h-3.5 text-zinc-400" /> Charset
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        list="charset-suggestions"
+                        value={selectedConfig.charset || ''}
+                        onChange={(e) => setSelectedConfig({ ...selectedConfig, charset: e.target.value.toUpperCase() })}
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                        placeholder="UTF8"
+                      />
+                      <datalist id="charset-suggestions">
+                        {COMMON_CHARSETS.map((cs) => (
+                          <option key={cs} value={cs} />
+                        ))}
+                      </datalist>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1">Dialecto SQL</label>
+                    <select
+                      value={selectedConfig.dialect || 3}
+                      onChange={(e) => setSelectedConfig({ ...selectedConfig, dialect: parseInt(e.target.value) || 3 })}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                    >
+                      <option value={3}>Dialect 3 (Estándar)</option>
+                      <option value={1}>Dialect 1 (Legacy)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1">Dialecto SQL</label>
-                <select
-                  value={selectedConfig.dialect || 3}
-                  onChange={(e) => setSelectedConfig({ ...selectedConfig, dialect: parseInt(e.target.value) || 3 })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                >
-                  <option value={3}>Dialect 3 (Estándar)</option>
-                  <option value={1}>Dialect 1 (Legacy)</option>
-                </select>
-              </div>
-            </div>
+            )}
 
-            {/* Test result message */}
+            {/* Tab: SSH Tunnel Settings */}
+            {activeTab === 'ssh' && (
+              <div className="space-y-4 animate-in fade-in duration-150">
+                {/* Enable Switch Card */}
+                <div className="p-4 bg-zinc-950/60 border border-zinc-800 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-lg border ${
+                      sshConfig.enabled 
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' 
+                        : 'bg-zinc-900 text-zinc-500 border-zinc-800'
+                    }`}>
+                      <Terminal className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                        <span>{t('ssh.enableSsh')}</span>
+                        {sshConfig.enabled && (
+                          <span className="text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded-full font-medium">
+                            {t('ssh.activeBadge')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {t('ssh.enableSshDesc')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={sshConfig.enabled} 
+                      onChange={(e) => updateSshConfig({ enabled: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {sshConfig.enabled ? (
+                  <div className="space-y-4 pt-1">
+                    {/* SSH Server Host & Port */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
+                          <Server className="w-3.5 h-3.5 text-zinc-400" /> {t('ssh.sshHost')}
+                        </label>
+                        <input
+                          type="text"
+                          value={sshConfig.host}
+                          onChange={(e) => updateSshConfig({ host: e.target.value })}
+                          className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                          placeholder="bastion.midominio.com o 192.168.1.10"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-300 mb-1">
+                          {t('ssh.sshPort')}
+                        </label>
+                        <input
+                          type="number"
+                          value={sshConfig.port || 22}
+                          onChange={(e) => updateSshConfig({ port: parseInt(e.target.value) || 22 })}
+                          className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                          placeholder="22"
+                        />
+                      </div>
+                    </div>
+
+                    {/* SSH User */}
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-zinc-400" /> {t('ssh.sshUser')}
+                      </label>
+                      <input
+                        type="text"
+                        value={sshConfig.user}
+                        onChange={(e) => updateSshConfig({ user: e.target.value })}
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                        placeholder="root, ubuntu, debian..."
+                      />
+                    </div>
+
+                    {/* Authentication Type Selector */}
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                        {t('ssh.authMethod')}
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => updateSshConfig({ authType: 'password' })}
+                          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-xs font-medium transition-all ${
+                            sshConfig.authType === 'password'
+                              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                          }`}
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>{t('ssh.authPassword')}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => updateSshConfig({ authType: 'privateKey' })}
+                          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-xs font-medium transition-all ${
+                            sshConfig.authType === 'privateKey'
+                              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                          }`}
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                          <span>{t('ssh.authKey')}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Auth Inputs based on type */}
+                    {sshConfig.authType === 'password' ? (
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
+                          <Lock className="w-3.5 h-3.5 text-zinc-400" /> {t('ssh.sshPassword')}
+                        </label>
+                        <input
+                          type="password"
+                          value={sshConfig.password || ''}
+                          onChange={(e) => updateSshConfig({ password: e.target.value })}
+                          className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                          placeholder="••••••••"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <Key className="w-3.5 h-3.5 text-zinc-400" /> {t('ssh.privateKeyPath')}
+                            </span>
+                            <span className="text-[11px] text-zinc-500">id_rsa, id_ed25519, .pem</span>
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={sshConfig.privateKeyPath || ''}
+                              onChange={(e) => updateSshConfig({ privateKeyPath: e.target.value })}
+                              className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                              placeholder="/home/usuario/.ssh/id_rsa o C:\Users\...\id_rsa"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleBrowseSshKey}
+                              title={t('ssh.browseKey')}
+                              className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg flex items-center gap-1.5 text-xs transition-colors"
+                            >
+                              <FolderOpen className="w-4 h-4 text-amber-400" />
+                              <span>{t('ssh.browseKey')}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1">
+                            <Lock className="w-3.5 h-3.5 text-zinc-400" /> {t('ssh.passphrase')}
+                          </label>
+                          <input
+                            type="password"
+                            value={sshConfig.passphrase || ''}
+                            onChange={(e) => updateSshConfig({ passphrase: e.target.value })}
+                            className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                            placeholder="Dejar vacío si la clave no está protegida por contraseña"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action: Test SSH Tunnel */}
+                    <div className="pt-2 flex items-center justify-between border-t border-zinc-800/80">
+                      <button
+                        type="button"
+                        onClick={handleTestSsh}
+                        disabled={isTestingSsh || !sshConfig.host || !sshConfig.user}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 disabled:opacity-50 transition-colors"
+                      >
+                        <Zap className={`w-3.5 h-3.5 text-amber-400 ${isTestingSsh ? 'animate-spin' : ''}`} />
+                        <span>{isTestingSsh ? t('ssh.testingSsh') : t('ssh.testSsh')}</span>
+                      </button>
+                      
+                      <div className="text-[11px] text-zinc-500">
+                        Puerto local dinámico asignado por SO
+                      </div>
+                    </div>
+
+                    {/* SSH Test Result */}
+                    {sshTestResult && (
+                      <div
+                        className={`p-3 rounded-lg border flex items-start gap-2.5 text-xs animate-in fade-in duration-150 ${
+                          sshTestResult.success
+                            ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                            : 'bg-red-950/40 border-red-500/40 text-red-300'
+                        }`}
+                      >
+                        {sshTestResult.success ? (
+                          <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
+                        )}
+                        <div>
+                          <div className="font-semibold">
+                            {sshTestResult.success ? t('ssh.sshSuccess') : 'Error en Túnel SSH'}
+                            {sshTestResult.pingMs !== undefined && ` (${sshTestResult.pingMs} ms)`}
+                          </div>
+                          <div className="text-[11px] opacity-90 mt-0.5 whitespace-pre-wrap font-mono">
+                            {sshTestResult.message}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Info Box */}
+                    <div className="p-3 bg-zinc-950/40 border border-zinc-800/70 rounded-lg text-xs text-zinc-400 flex items-start gap-2.5">
+                      <ShieldCheck className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                      <div className="text-[11px] leading-relaxed">
+                        {t('ssh.sshHint')}
+                      </div>
+                    </div>
+
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-zinc-500 space-y-2 border border-dashed border-zinc-800 rounded-xl">
+                    <Terminal className="w-8 h-8 mx-auto text-zinc-600 opacity-60" />
+                    <div className="text-xs font-medium text-zinc-400">Túnel SSH desactivado</div>
+                    <div className="text-[11px] max-w-sm mx-auto text-zinc-500">
+                      Esta conexión se conectará de manera directa al Host y Puerto configurados en la pestaña General.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Test result message (for Firebird database connection) */}
             {testResult && (
               <div
-                className={`p-3 rounded-lg border flex items-start gap-2.5 text-xs ${
+                className={`p-3 rounded-lg border flex items-start gap-2.5 text-xs animate-in fade-in duration-150 ${
                   testResult.success
                     ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
                     : 'bg-red-950/40 border-red-500/40 text-red-300'
@@ -504,7 +912,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 disabled:opacity-50 transition-colors"
             >
               <Zap className={`w-3.5 h-3.5 text-amber-400 ${isTesting ? 'animate-spin' : ''}`} />
-              {isTesting ? 'Probando...' : 'Probar Conexión'}
+              {isTesting ? 'Probando...' : (sshConfig.enabled ? 'Probar Conexión (vía SSH)' : 'Probar Conexión')}
             </button>
 
             <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-400 hover:text-zinc-200 select-none">
@@ -536,7 +944,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               type="button"
               onClick={handleConnect}
               disabled={isConnecting || !selectedConfig.database}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold text-xs disabled:opacity-50 transition-all shadow-md hover:shadow-amber-500/20"
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold text-xs disabled:opacity-50 transition-all shadow-md hover:shadow-amber-500/20"
             >
               <Database className="w-4 h-4" />
               {isConnecting ? 'Conectando...' : 'Conectar Base de Datos'}

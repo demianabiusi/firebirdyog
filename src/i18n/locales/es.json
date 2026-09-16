@@ -282,5 +282,35 @@
     "targetValue": "Definición en Destino",
     "migrationSql": "SQL de Migración a Destino",
     "activeConnection": "Conexión Activa"
+  },
+  "ssh": {
+    "tabTitle": "Túnel SSH",
+    "generalTab": "General",
+    "enableSsh": "Usar túnel SSH para esta conexión",
+    "enableSshDesc": "Permite acceder a bases de datos Firebird remotas o aisladas mediante un salto SSH seguro.",
+    "sshHost": "Servidor SSH (Host o IP)",
+    "sshPort": "Puerto SSH",
+    "sshUser": "Usuario SSH",
+    "authMethod": "Método de Autenticación",
+    "authPassword": "Password",
+    "authKey": "Clave Privada (Private Key)",
+    "sshPassword": "Password SSH",
+    "privateKeyPath": "Archivo de Clave Privada",
+    "browseKey": "Examinar...",
+    "passphrase": "Frase de paso (Passphrase opcional)",
+    "testSsh": "Probar Túnel SSH",
+    "testingSsh": "Probando conexión SSH...",
+    "sshSuccess": "¡Conexión al servidor SSH establecida exitosamente!",
+    "sshHint": "Nota: Desde la perspectiva del túnel SSH, el host de la BD en la pestaña 'General' suele ser 127.0.0.1 si Firebird corre en el mismo servidor SSH.",
+    "badge": "SSH",
+    "activeBadge": "Túnel Activo",
+    "inactiveBadge": "Sin Túnel"
+  },
+  "theme": {
+    "theme": "Tema",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "switchToLight": "Cambiar a tema claro",
+    "switchToDark": "Cambiar a tema oscuro"
   }
 }

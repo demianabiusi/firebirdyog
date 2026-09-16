@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import appIconUrl from '../../public/icon.svg';
 import { ConnectionConfig } from '../types';
 import { useTranslation } from '../i18n/I18nContext';
+import { useTheme } from '../theme/ThemeContext';
 import { 
   Flame, 
   Database, 
@@ -15,7 +16,9 @@ import {
   Upload,
   Globe,
   ChevronDown,
-  GitCompare
+  GitCompare,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -42,6 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNewQuery
 }) => {
   const { t, language, setLanguage, availableLanguages } = useTranslation();
+  const { theme, toggleTheme } = useTheme();
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
 
   const currentLang = availableLanguages.find(l => l.code === language) || availableLanguages[0];
@@ -123,6 +127,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="font-semibold text-zinc-200">{activeConfig.name}</span>
             <span className="text-zinc-500">({activeConfig.host}:{activeConfig.port})</span>
+            {activeConfig.ssh?.enabled && (
+              <span 
+                className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded tracking-wider uppercase"
+                title={`Túnel SSH: ${activeConfig.ssh.user}@${activeConfig.ssh.host}:${activeConfig.ssh.port || 22}`}
+              >
+                SSH
+              </span>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-xs text-zinc-500">
@@ -178,6 +190,26 @@ export const Navbar: React.FC<NavbarProps> = ({
             </>
           )}
         </div>
+
+        {/* Theme Switcher */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+          title={theme === 'light' ? (t('theme.switchToDark') || 'Cambiar a tema oscuro') : (t('theme.switchToLight') || 'Cambiar a tema claro')}
+        >
+          {theme === 'light' ? (
+            <>
+              <Sun className="w-3.5 h-3.5 text-amber-500" />
+              <span className="text-[11px] font-semibold">{t('theme.light') || 'Claro'}</span>
+            </>
+          ) : (
+            <>
+              <Moon className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-[11px] font-semibold">{t('theme.dark') || 'Oscuro'}</span>
+            </>
+          )}
+        </button>
 
         <button
           onClick={onOpenCreateDbModal}

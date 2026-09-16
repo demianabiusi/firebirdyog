@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
 import { useTranslation } from '../../i18n/I18nContext';
+import { useTheme } from '../../theme/ThemeContext';
 import { 
   ConnectionConfig, 
   CompareDiffItem, 
@@ -56,6 +57,7 @@ export const CompareDatabaseModal: React.FC<CompareDatabaseModalProps> = ({
   onOpenInSqlEditor
 }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
 
   // Connection selection
   const [sourceId, setSourceId] = useState<string>('');
@@ -569,7 +571,7 @@ export const CompareDatabaseModal: React.FC<CompareDatabaseModalProps> = ({
                 <button
                   onClick={handleStartCompare}
                   disabled={!sourceId || !targetId || sourceId === targetId}
-                  className="flex items-center gap-2 px-4 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-950 font-bold rounded-lg text-xs transition-colors shadow-md shadow-amber-500/10"
+                  className="flex items-center gap-2 px-4 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-lg text-xs transition-colors shadow-md shadow-amber-500/10"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                   {t('compareModal.startCompare')}
@@ -673,7 +675,7 @@ export const CompareDatabaseModal: React.FC<CompareDatabaseModalProps> = ({
                   onClick={() => setStatusFilter('DIFFS_ONLY')}
                   className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
                     statusFilter === 'DIFFS_ONLY'
-                      ? 'bg-amber-500 text-zinc-950 font-semibold'
+                      ? 'bg-amber-500 text-slate-950 font-semibold'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
@@ -962,7 +964,7 @@ export const CompareDatabaseModal: React.FC<CompareDatabaseModalProps> = ({
               <button
                 onClick={handleGenerateScript}
                 disabled={selectedCount === 0 || isGeneratingScript}
-                className="flex items-center gap-2 px-5 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-zinc-950 font-bold rounded-lg text-xs transition-colors shadow-md shadow-amber-500/10"
+                className="flex items-center gap-2 px-5 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs transition-colors shadow-md shadow-amber-500/10"
               >
                 {isGeneratingScript ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
@@ -1009,7 +1011,7 @@ export const CompareDatabaseModal: React.FC<CompareDatabaseModalProps> = ({
                 language="sql"
                 value={generatedScript}
                 onChange={(val) => setGeneratedScript(val || '')}
-                theme="vs-dark"
+                theme={theme === 'light' ? 'vs' : 'vs-dark'}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,

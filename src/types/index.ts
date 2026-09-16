@@ -1,3 +1,14 @@
+export interface SshTunnelConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  user: string;
+  authType: 'password' | 'privateKey';
+  password?: string;
+  privateKeyPath?: string;
+  passphrase?: string;
+}
+
 export interface ConnectionConfig {
   id: string;
   name: string;
@@ -11,6 +22,7 @@ export interface ConnectionConfig {
   dialect?: number;
   pageSize?: number;
   createdAt?: string;
+  ssh?: SshTunnelConfig;
 }
 
 export type DbObjectType = 
@@ -98,6 +110,8 @@ export interface ElectronAPI {
   saveConnection: (config: ConnectionConfig) => Promise<ConnectionConfig>;
   deleteConnection: (id: string) => Promise<boolean>;
   testConnection: (config: ConnectionConfig) => Promise<IpcResponse<{ message: string; pingMs: number }>>;
+  testSshConnection: (sshConfig: SshTunnelConfig) => Promise<IpcResponse<{ message: string; pingMs: number }>>;
+  selectSshKeyFile: () => Promise<string | null>;
   connect: (config: ConnectionConfig) => Promise<IpcResponse<{ database: string }>>;
   disconnect: () => Promise<IpcResponse<boolean>>;
   getConnectionStatus: () => Promise<{ isConnected: boolean; config: ConnectionConfig | null }>;

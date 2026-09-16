@@ -692,7 +692,7 @@ END;
               <div className="flex items-center gap-2 mt-2">
                 <button
                   onClick={() => setIsConnectionModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold rounded-lg text-xs transition-colors shadow-md shadow-amber-500/10"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold rounded-lg text-xs transition-colors shadow-md shadow-amber-500/10"
                 >
                   <Database className="w-3.5 h-3.5" />
                   Conectar

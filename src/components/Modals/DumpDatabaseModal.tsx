@@ -538,7 +538,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
                     type="button"
                     onClick={handleStartExport}
                     disabled={isExporting}
-                    className="flex items-center gap-2 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-lg text-xs transition-all shadow-md shadow-amber-500/20 disabled:opacity-50"
+                    className="flex items-center gap-2 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-md shadow-amber-500/20 disabled:opacity-50"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                     <span>{t('dumpModal.startExport')}</span>

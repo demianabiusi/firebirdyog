@@ -1,5 +1,6 @@
 import * as FirebirdRaw from 'node-firebird';
 import type FirebirdType from 'node-firebird';
+import { SshTunnelConfig, SshTunnelInstance, sshTunnelService } from './ssh-tunnel-service';
 
 // Resolve CommonJS / ESM interop for node-firebird
 const Firebird: typeof FirebirdType = ((FirebirdRaw as any).attach 
@@ -15,10 +16,12 @@ export interface FirebirdConnectionOptions {
   role?: string;
   charset?: string;
   pageSize?: number;
+  ssh?: SshTunnelConfig;
 }
 
 export class FirebirdService {
   private activeDb: FirebirdType.Database | null = null;
+  private activeTunnel: SshTunnelInstance | null = null;
   private currentConfig: any = null;
 
   public isConnected(): boolean {
@@ -31,7 +34,18 @@ export class FirebirdService {
 
   public async testConnection(options: FirebirdConnectionOptions): Promise<{ success: boolean; message: string; pingMs: number }> {
     const start = Date.now();
-    return new Promise((resolve) => {
+    let tempTunnel: SshTunnelInstance | null = null;
+
+    try {
+      let host = options.host || '127.0.0.1';
+      let port = Number(options.port) || 3050;
+
+      if (options.ssh && options.ssh.enabled) {
+        tempTunnel = await sshTunnelService.createTunnel(options.ssh, host, port);
+        host = tempTunnel.localHost;
+        port = tempTunnel.localPort;
+      }
+
       const normalizeCharset = (cs?: string): string => {
         const raw = (cs || 'UTF8').trim().toUpperCase();
         if (raw === 'ISO-8859-1' || raw === 'ISO_8859_1' || raw === 'ISO8859-1') return 'ISO8859_1';
@@ -39,8 +53,8 @@ export class FirebirdService {
       };
 
       const fbOptions: FirebirdType.Options = {
-        host: options.host || '127.0.0.1',
-        port: Number(options.port) || 3050,
+        host,
+        port,
         database: options.database,
         user: options.user || 'SYSDBA',
         password: options.password || 'masterkey',
@@ -50,33 +64,65 @@ export class FirebirdService {
         lowercase_keys: false
       };
 
-      Firebird.attach(fbOptions, (err, db) => {
-        const pingMs = Date.now() - start;
-        if (err) {
-          resolve({
-            success: false,
-            message: err.message || String(err),
-            pingMs
-          });
-        } else {
-          db.detach((detachErr) => {
-            if (detachErr) {
-              console.warn('Error during detach after test:', detachErr);
-            }
+      return await new Promise((resolve) => {
+        Firebird.attach(fbOptions, (err, db) => {
+          const pingMs = Date.now() - start;
+          if (err) {
             resolve({
-              success: true,
-              message: '¡Conexión exitosa a la base de datos Firebird!',
+              success: false,
+              message: (options.ssh?.enabled ? '[Túnel SSH OK] ' : '') + (err.message || String(err)),
               pingMs
             });
-          });
-        }
+          } else {
+            db.detach((detachErr) => {
+              if (detachErr) {
+                console.warn('Error during detach after test:', detachErr);
+              }
+              resolve({
+                success: true,
+                message: options.ssh?.enabled
+                  ? '¡Conexión exitosa a Firebird a través del túnel SSH!'
+                  : '¡Conexión exitosa a la base de datos Firebird!',
+                pingMs
+              });
+            });
+          }
+        });
       });
-    });
+    } catch (err: any) {
+      const pingMs = Date.now() - start;
+      return {
+        success: false,
+        message: `Error de túnel SSH: ${err.message || String(err)}`,
+        pingMs
+      };
+    } finally {
+      if (tempTunnel) {
+        try {
+          await tempTunnel.close();
+        } catch (closeErr) {
+          console.warn('Error closing test SSH tunnel:', closeErr);
+        }
+      }
+    }
   }
 
   public async connect(options: FirebirdConnectionOptions): Promise<void> {
-    if (this.activeDb) {
+    if (this.activeDb || this.activeTunnel) {
       await this.disconnect();
+    }
+
+    let host = options.host || '127.0.0.1';
+    let port = Number(options.port) || 3050;
+
+    if (options.ssh && options.ssh.enabled) {
+      try {
+        this.activeTunnel = await sshTunnelService.createTunnel(options.ssh, host, port);
+        host = this.activeTunnel.localHost;
+        port = this.activeTunnel.localPort;
+      } catch (err: any) {
+        throw new Error(`Error al iniciar túnel SSH: ${err.message || String(err)}`);
+      }
     }
 
     const normalizeCharset = (cs?: string): string => {
@@ -86,8 +132,8 @@ export class FirebirdService {
     };
 
     const fbOptions: FirebirdType.Options = {
-      host: options.host || '127.0.0.1',
-      port: Number(options.port) || 3050,
+      host,
+      port,
       database: options.database,
       user: options.user || 'SYSDBA',
       password: options.password || 'masterkey',
@@ -98,8 +144,14 @@ export class FirebirdService {
     };
 
     return new Promise((resolve, reject) => {
-      Firebird.attach(fbOptions, (err, db) => {
+      Firebird.attach(fbOptions, async (err, db) => {
         if (err) {
+          if (this.activeTunnel) {
+            try {
+              await this.activeTunnel.close();
+            } catch {}
+            this.activeTunnel = null;
+          }
           return reject(err);
         }
         this.activeDb = db;
@@ -110,8 +162,21 @@ export class FirebirdService {
   }
 
   public async createDatabase(options: FirebirdConnectionOptions): Promise<{ database: string }> {
-    if (this.activeDb) {
+    if (this.activeDb || this.activeTunnel) {
       await this.disconnect();
+    }
+
+    let host = options.host || '127.0.0.1';
+    let port = Number(options.port) || 3050;
+
+    if (options.ssh && options.ssh.enabled) {
+      try {
+        this.activeTunnel = await sshTunnelService.createTunnel(options.ssh, host, port);
+        host = this.activeTunnel.localHost;
+        port = this.activeTunnel.localPort;
+      } catch (err: any) {
+        throw new Error(`Error al iniciar túnel SSH: ${err.message || String(err)}`);
+      }
     }
 
     const normalizeCharset = (cs?: string): string => {
@@ -121,8 +186,8 @@ export class FirebirdService {
     };
 
     const fbOptions: FirebirdType.Options = {
-      host: options.host || '127.0.0.1',
-      port: Number(options.port) || 3050,
+      host,
+      port,
       database: options.database,
       user: options.user || 'SYSDBA',
       password: options.password || 'masterkey',
@@ -134,8 +199,14 @@ export class FirebirdService {
     };
 
     return new Promise((resolve, reject) => {
-      Firebird.create(fbOptions, (err, db) => {
+      Firebird.create(fbOptions, async (err, db) => {
         if (err) {
+          if (this.activeTunnel) {
+            try {
+              await this.activeTunnel.close();
+            } catch {}
+            this.activeTunnel = null;
+          }
           return reject(err);
         }
         this.activeDb = db;
@@ -146,17 +217,34 @@ export class FirebirdService {
   }
 
   public async disconnect(): Promise<void> {
-    if (!this.activeDb) return;
-    return new Promise((resolve) => {
-      this.activeDb!.detach((err) => {
-        if (err) {
-          console.warn('Error detaching database:', err);
-        }
+    const detachPromise = new Promise<void>((resolve) => {
+      if (!this.activeDb) return resolve();
+      try {
+        this.activeDb.detach((err) => {
+          if (err) {
+            console.warn('Error detaching database:', err);
+          }
+          this.activeDb = null;
+          resolve();
+        });
+      } catch (e) {
         this.activeDb = null;
-        this.currentConfig = null;
         resolve();
-      });
+      }
     });
+
+    await detachPromise;
+
+    if (this.activeTunnel) {
+      try {
+        await this.activeTunnel.close();
+      } catch (err) {
+        console.warn('Error closing active SSH tunnel:', err);
+      }
+      this.activeTunnel = null;
+    }
+
+    this.currentConfig = null;
   }
 
   public async readBlobValue(val: any): Promise<string> {

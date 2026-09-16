@@ -47,7 +47,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => this.setState({ hasError: false, error: null })}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold rounded-lg text-xs transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold rounded-lg text-xs transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Recuperar Interfaz

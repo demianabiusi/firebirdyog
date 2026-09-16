@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveConnection: (config: any) => ipcRenderer.invoke('fb:save-connection', config),
   deleteConnection: (id: string) => ipcRenderer.invoke('fb:delete-connection', id),
   testConnection: (config: any) => ipcRenderer.invoke('fb:test-connection', config),
+  testSshConnection: (sshConfig: any) => ipcRenderer.invoke('fb:test-ssh', sshConfig),
+  selectSshKeyFile: () => ipcRenderer.invoke('dialog:select-ssh-key'),
   connect: (config: any) => ipcRenderer.invoke('fb:connect', config),
   disconnect: () => ipcRenderer.invoke('fb:disconnect'),
   getConnectionStatus: () => ipcRenderer.invoke('fb:get-status'),

@@ -37,7 +37,9 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -49,7 +51,9 @@
       "shortcutName": "FirebirdYog"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Development"
     }
   },
@@ -69,6 +73,7 @@
     "node-firebird": "^2.15.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "ssh2": "^1.17.0",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
@@ -76,6 +81,7 @@
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@types/ssh2": "^1.15.6",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
     "electron": "^44.1.0",

@@ -5,6 +5,7 @@ import { FirebirdService } from './firebird-service';
 import { StorageService } from './storage-service';
 import { DumpService, DumpOptions, DumpProgress } from './dump-service';
 import { CompareService, CompareOptions, CompareProgress } from './compare-service';
+import { sshTunnelService, SshTunnelConfig } from './ssh-tunnel-service';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
@@ -125,7 +126,7 @@ function createWindow() {
     minHeight: 600,
     title: 'FirebirdYog - Firebird Database Client',
     icon: appIcon,
-    backgroundColor: '#09090b',
+    backgroundColor: '#f8fafc',
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
@@ -249,6 +250,29 @@ ipcMain.handle('fb:test-connection', async (_, config) => {
   } catch (err: any) {
     return { success: false, error: err.message || 'Error en prueba de conexión' };
   }
+});
+
+ipcMain.handle('fb:test-ssh', async (_, sshConfig: SshTunnelConfig) => {
+  try {
+    const res = await sshTunnelService.testSshConnection(sshConfig);
+    return { success: res.success, data: { message: res.message, pingMs: res.pingMs } };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error en prueba de conexión SSH' };
+  }
+});
+
+ipcMain.handle('dialog:select-ssh-key', async () => {
+  if (!mainWindow) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Seleccionar archivo de clave privada SSH (id_rsa, id_ed25519, .pem, .key)',
+    properties: ['openFile', 'showHiddenFiles'],
+    filters: [
+      { name: 'All Files / SSH Keys', extensions: ['*'] },
+      { name: 'Keys', extensions: ['pem', 'key', 'ppk', 'pub'] }
+    ]
+  });
+  if (canceled || filePaths.length === 0) return null;
+  return filePaths[0];
 });
 
 ipcMain.handle('fb:connect', async (_, config) => {
