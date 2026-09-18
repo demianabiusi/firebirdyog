@@ -893,7 +893,388 @@ export class FirebirdService {
       return { ddl: details.ddl || '', name: cleanName, type: 'TABLE' };
     }
 
+    if (typeUpper === 'GENERATOR' || typeUpper === 'SEQUENCE') {
+      const q = `SELECT GEN_ID(${cleanName}, 0) AS VAL FROM RDB$DATABASE;`;
+      const rows = await queryParamsAsync(q, []);
+      const val = rows.length > 0 ? (rows[0].VAL ?? 0) : 0;
+      const ddl = `CREATE SEQUENCE ${cleanName};\nALTER SEQUENCE ${cleanName} RESTART WITH ${val};\n`;
+      return { ddl, name: cleanName, type: 'GENERATOR' };
+    }
+
+    if (typeUpper === 'EXCEPTION') {
+      const q = `SELECT TRIM(RDB$MESSAGE) AS MSG FROM RDB$EXCEPTIONS WHERE TRIM(RDB$EXCEPTION_NAME) = ?`;
+      const rows = await queryParamsAsync(q, [cleanName]);
+      const msg = rows.length > 0 ? (rows[0].MSG || '') : '';
+      const ddl = `CREATE EXCEPTION ${cleanName} '${msg}';\n`;
+      return { ddl, name: cleanName, type: 'EXCEPTION' };
+    }
+
+    if (typeUpper === 'DOMAIN') {
+      const q = `
+        SELECT 
+          F.RDB$FIELD_TYPE AS FIELD_TYPE_CODE,
+          F.RDB$FIELD_SUB_TYPE AS FIELD_SUB_TYPE,
+          F.RDB$FIELD_LENGTH AS FIELD_LENGTH,
+          F.RDB$FIELD_PRECISION AS FIELD_PRECISION,
+          F.RDB$FIELD_SCALE AS FIELD_SCALE,
+          F.RDB$NULL_FLAG AS NULL_FLAG,
+          F.RDB$DEFAULT_SOURCE AS DEFAULT_SOURCE,
+          F.RDB$VALIDATION_SOURCE AS CHECK_SOURCE
+        FROM RDB$FIELDS F
+        WHERE TRIM(F.RDB$FIELD_NAME) = ?
+      `;
+      const rows = await queryParamsAsync(q, [cleanName]);
+      if (rows.length === 0) {
+        throw new Error(`No se encontró el dominio '${cleanName}'.`);
+      }
+      const r = rows[0];
+      const typeStr = this.resolveFieldType(
+        Number(r.FIELD_TYPE_CODE),
+        Number(r.FIELD_SUB_TYPE),
+        Number(r.FIELD_LENGTH),
+        Number(r.FIELD_PRECISION),
+        Number(r.FIELD_SCALE)
+      );
+      let ddl = `CREATE DOMAIN ${cleanName} AS ${typeStr}`;
+      const def = await this.readBlobValue(r.DEFAULT_SOURCE);
+      if (def && def.trim()) ddl += ` ${def.trim()}`;
+      if (Number(r.NULL_FLAG) === 1) ddl += ' NOT NULL';
+      const check = await this.readBlobValue(r.CHECK_SOURCE);
+      if (check && check.trim()) ddl += `\n  CHECK (${check.trim()})`;
+      ddl += ';\n';
+      return { ddl, name: cleanName, type: 'DOMAIN' };
+    }
+
     throw new Error(`Tipo de objeto '${objectType}' no soportado para generación de DDL.`);
+  }
+
+  public async getObjectDependencies(objectName: string, objectType?: string): Promise<{
+    objectName: string;
+    objectType: string;
+    dependsOn: Array<{
+      objectName: string;
+      objectType: string;
+      fieldName?: string | null;
+      fields?: string[];
+      detail?: string;
+    }>;
+    dependedOnBy: Array<{
+      objectName: string;
+      objectType: string;
+      fieldName?: string | null;
+      fields?: string[];
+      detail?: string;
+    }>;
+  }> {
+    if (!this.activeDb) {
+      throw new Error('No hay conexión activa a la base de datos.');
+    }
+
+    const cleanName = objectName.trim().toUpperCase();
+
+    const queryParamsAsync = (sql: string, params: any[]): Promise<any[]> => {
+      return new Promise((res, rej) => {
+        this.activeDb!.query(sql, params, (err, rows) => {
+          if (err) return rej(err);
+          res(Array.isArray(rows) ? rows : []);
+        });
+      });
+    };
+
+    // 1. Differentiate tables vs views
+    const relationsQuery = `
+      SELECT 
+        TRIM(RDB$RELATION_NAME) AS NAME,
+        CASE WHEN RDB$VIEW_BLR IS NOT NULL THEN 'VIEW' ELSE 'TABLE' END AS TYPE
+      FROM RDB$RELATIONS
+      WHERE (RDB$SYSTEM_FLAG = 0 OR RDB$SYSTEM_FLAG IS NULL)
+    `;
+
+    // 2. Query RDB$DEPENDENCIES in both directions
+    const dependsOnQuery = `
+      SELECT 
+        TRIM(D.RDB$DEPENDED_ON_NAME) AS OBJ_NAME,
+        D.RDB$DEPENDED_ON_TYPE AS TYPE_CODE,
+        TRIM(D.RDB$FIELD_NAME) AS FIELD_NAME
+      FROM RDB$DEPENDENCIES D
+      WHERE TRIM(D.RDB$DEPENDENT_NAME) = ?
+    `;
+
+    const dependedOnByQuery = `
+      SELECT 
+        TRIM(D.RDB$DEPENDENT_NAME) AS OBJ_NAME,
+        D.RDB$DEPENDENT_TYPE AS TYPE_CODE,
+        TRIM(D.RDB$FIELD_NAME) AS FIELD_NAME
+      FROM RDB$DEPENDENCIES D
+      WHERE TRIM(D.RDB$DEPENDED_ON_NAME) = ?
+    `;
+
+    // 3. Foreign Keys (if table)
+    const fkQuery = `
+      SELECT 
+        TRIM(RC.RDB$CONSTRAINT_NAME) AS CONSTRAINT_NAME,
+        TRIM(RC.RDB$RELATION_NAME) AS SOURCE_TABLE,
+        TRIM(RC_PK.RDB$RELATION_NAME) AS TARGET_TABLE,
+        TRIM(ISG_SRC.RDB$FIELD_NAME) AS SOURCE_FIELD,
+        TRIM(ISG_TGT.RDB$FIELD_NAME) AS TARGET_FIELD
+      FROM RDB$RELATION_CONSTRAINTS RC
+      JOIN RDB$REF_CONSTRAINTS REF ON RC.RDB$CONSTRAINT_NAME = REF.RDB$CONSTRAINT_NAME
+      JOIN RDB$RELATION_CONSTRAINTS RC_PK ON REF.RDB$CONST_NAME_UQ = RC_PK.RDB$CONSTRAINT_NAME
+      LEFT JOIN RDB$INDEX_SEGMENTS ISG_SRC ON RC.RDB$INDEX_NAME = ISG_SRC.RDB$INDEX_NAME
+      LEFT JOIN RDB$INDEX_SEGMENTS ISG_TGT ON RC_PK.RDB$INDEX_NAME = ISG_TGT.RDB$INDEX_NAME
+        AND ISG_SRC.RDB$FIELD_POSITION = ISG_TGT.RDB$FIELD_POSITION
+      WHERE RC.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY'
+        AND (TRIM(RC.RDB$RELATION_NAME) = ? OR TRIM(RC_PK.RDB$RELATION_NAME) = ?)
+      ORDER BY RC.RDB$CONSTRAINT_NAME, ISG_SRC.RDB$FIELD_POSITION
+    `;
+
+    // 4. Domains (fields using domains)
+    const domainQuery = `
+      SELECT 
+        TRIM(RF.RDB$RELATION_NAME) AS TABLE_NAME,
+        TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME,
+        TRIM(RF.RDB$FIELD_SOURCE) AS DOMAIN_NAME
+      FROM RDB$RELATION_FIELDS RF
+      JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+      WHERE (TRIM(RF.RDB$RELATION_NAME) = ? OR TRIM(RF.RDB$FIELD_SOURCE) = ?)
+        AND RF.RDB$FIELD_SOURCE NOT STARTING WITH 'RDB$'
+    `;
+
+    // 5. Triggers for table
+    const tableTriggersQuery = `
+      SELECT 
+        TRIM(RDB$TRIGGER_NAME) AS TRIGGER_NAME,
+        RDB$TRIGGER_TYPE AS TRIG_TYPE,
+        COALESCE(RDB$TRIGGER_INACTIVE, 0) AS INACTIVE
+      FROM RDB$TRIGGERS
+      WHERE TRIM(RDB$RELATION_NAME) = ?
+        AND (RDB$SYSTEM_FLAG = 0 OR RDB$SYSTEM_FLAG IS NULL)
+    `;
+
+    const [relations, rawDependsOn, rawDependedOnBy, rawFks, rawDomains, rawTableTriggers] = await Promise.all([
+      queryParamsAsync(relationsQuery, []).catch(() => []),
+      queryParamsAsync(dependsOnQuery, [cleanName]).catch(() => []),
+      queryParamsAsync(dependedOnByQuery, [cleanName]).catch(() => []),
+      queryParamsAsync(fkQuery, [cleanName, cleanName]).catch(() => []),
+      queryParamsAsync(domainQuery, [cleanName, cleanName]).catch(() => []),
+      queryParamsAsync(tableTriggersQuery, [cleanName]).catch(() => [])
+    ]);
+
+    const relationMap = new Map<string, string>();
+    for (const rel of relations) {
+      const name = this.extractString(rel, 'NAME');
+      const type = this.extractString(rel, 'TYPE');
+      if (name) relationMap.set(name, type);
+    }
+
+    const resolveType = (code: number, name: string): string => {
+      switch (code) {
+        case 0:
+          return relationMap.get(name) || 'TABLE';
+        case 1: return 'VIEW';
+        case 2: return 'TRIGGER';
+        case 3: return 'COMPUTED_FIELD';
+        case 4: return 'VALIDATION';
+        case 5: return 'PROCEDURE';
+        case 6: return 'EXPRESSION_INDEX';
+        case 7: return 'EXCEPTION';
+        case 8: return 'USER';
+        case 9: return 'COLUMN';
+        case 10: return 'INDEX';
+        case 14: return 'GENERATOR';
+        case 15: return 'FUNCTION';
+        case 18: return 'PACKAGE';
+        default: return 'OTHER';
+      }
+    };
+
+    // Helper map for dependsOn
+    const dependsOnMap = new Map<string, {
+      objectName: string;
+      objectType: string;
+      fieldName?: string | null;
+      fields: string[];
+      detail?: string;
+    }>();
+
+    // Helper map for dependedOnBy
+    const dependedOnByMap = new Map<string, {
+      objectName: string;
+      objectType: string;
+      fieldName?: string | null;
+      fields: string[];
+      detail?: string;
+    }>();
+
+    // Process rawDependsOn from RDB$DEPENDENCIES
+    for (const row of rawDependsOn) {
+      const objName = this.extractString(row, 'OBJ_NAME');
+      if (!objName || objName === cleanName || objName.startsWith('RDB$')) continue;
+      const typeCode = this.extractNumber(row, 'TYPE_CODE');
+      const fieldName = this.extractString(row, 'FIELD_NAME');
+      const objType = resolveType(typeCode, objName);
+
+      const key = `${objType}:${objName}`;
+      if (!dependsOnMap.has(key)) {
+        dependsOnMap.set(key, {
+          objectName: objName,
+          objectType: objType,
+          fields: [],
+          fieldName: fieldName || null,
+          detail: 'Referencia en definición'
+        });
+      }
+      if (fieldName && !dependsOnMap.get(key)!.fields.includes(fieldName)) {
+        dependsOnMap.get(key)!.fields.push(fieldName);
+      }
+    }
+
+    // Process rawDependedOnBy from RDB$DEPENDENCIES
+    for (const row of rawDependedOnBy) {
+      const objName = this.extractString(row, 'OBJ_NAME');
+      if (!objName || objName === cleanName || objName.startsWith('RDB$')) continue;
+      const typeCode = this.extractNumber(row, 'TYPE_CODE');
+      const fieldName = this.extractString(row, 'FIELD_NAME');
+      const objType = resolveType(typeCode, objName);
+
+      const key = `${objType}:${objName}`;
+      if (!dependedOnByMap.has(key)) {
+        dependedOnByMap.set(key, {
+          objectName: objName,
+          objectType: objType,
+          fields: [],
+          fieldName: fieldName || null,
+          detail: 'Depende de este objeto'
+        });
+      }
+      if (fieldName && !dependedOnByMap.get(key)!.fields.includes(fieldName)) {
+        dependedOnByMap.get(key)!.fields.push(fieldName);
+      }
+    }
+
+    // Process Foreign Keys
+    for (const fk of rawFks) {
+      const constraintName = this.extractString(fk, 'CONSTRAINT_NAME');
+      const srcTable = this.extractString(fk, 'SOURCE_TABLE');
+      const tgtTable = this.extractString(fk, 'TARGET_TABLE');
+      const srcField = this.extractString(fk, 'SOURCE_FIELD');
+      const tgtField = this.extractString(fk, 'TARGET_FIELD');
+
+      if (srcTable === cleanName && tgtTable && tgtTable !== cleanName) {
+        const key = `TABLE:${tgtTable}`;
+        const fkDesc = `Clave foránea ${constraintName} (${srcField} -> ${tgtTable}.${tgtField})`;
+        if (!dependsOnMap.has(key)) {
+          dependsOnMap.set(key, {
+            objectName: tgtTable,
+            objectType: 'TABLE',
+            fields: [tgtField],
+            fieldName: tgtField,
+            detail: fkDesc
+          });
+        } else {
+          dependsOnMap.get(key)!.detail = fkDesc;
+        }
+      } else if (tgtTable === cleanName && srcTable && srcTable !== cleanName) {
+        const key = `TABLE:${srcTable}`;
+        const fkDesc = `Referenciado por clave foránea ${constraintName} (${srcTable}.${srcField} -> ${tgtField})`;
+        if (!dependedOnByMap.has(key)) {
+          dependedOnByMap.set(key, {
+            objectName: srcTable,
+            objectType: 'TABLE',
+            fields: [srcField],
+            fieldName: srcField,
+            detail: fkDesc
+          });
+        } else {
+          dependedOnByMap.get(key)!.detail = fkDesc;
+        }
+      }
+    }
+
+    // Process Domains
+    for (const dom of rawDomains) {
+      const tbl = this.extractString(dom, 'TABLE_NAME');
+      const col = this.extractString(dom, 'COLUMN_NAME');
+      const domName = this.extractString(dom, 'DOMAIN_NAME');
+
+      if (tbl === cleanName && domName) {
+        const key = `DOMAIN:${domName}`;
+        if (!dependsOnMap.has(key)) {
+          dependsOnMap.set(key, {
+            objectName: domName,
+            objectType: 'DOMAIN',
+            fields: [col],
+            fieldName: col,
+            detail: `Dominio utilizado en columna ${col}`
+          });
+        } else {
+          if (!dependsOnMap.get(key)!.fields.includes(col)) {
+            dependsOnMap.get(key)!.fields.push(col);
+          }
+        }
+      } else if (domName === cleanName && tbl) {
+        const key = `TABLE:${tbl}`;
+        if (!dependedOnByMap.has(key)) {
+          dependedOnByMap.set(key, {
+            objectName: tbl,
+            objectType: relationMap.get(tbl) || 'TABLE',
+            fields: [col],
+            fieldName: col,
+            detail: `Columna ${col}`
+          });
+        } else {
+          if (!dependedOnByMap.get(key)!.fields.includes(col)) {
+            dependedOnByMap.get(key)!.fields.push(col);
+          }
+        }
+      }
+    }
+
+    // Process Table Triggers
+    for (const trig of rawTableTriggers) {
+      const trigName = this.extractString(trig, 'TRIGGER_NAME');
+      if (trigName) {
+        const key = `TRIGGER:${trigName}`;
+        const trigTypeNum = this.extractNumber(trig, 'TRIG_TYPE');
+        const trigTypeDesc = this.decodeTriggerType(trigTypeNum);
+        if (!dependedOnByMap.has(key)) {
+          dependedOnByMap.set(key, {
+            objectName: trigName,
+            objectType: 'TRIGGER',
+            fields: [],
+            detail: `Trigger de la tabla (${trigTypeDesc})`
+          });
+        }
+      }
+    }
+
+    // Update details if multiple fields
+    for (const item of dependsOnMap.values()) {
+      if (item.fields.length > 0 && item.detail === 'Referencia en definición') {
+        item.detail = `Campos referenciados: ${item.fields.join(', ')}`;
+      }
+    }
+    for (const item of dependedOnByMap.values()) {
+      if (item.fields.length > 0 && item.detail === 'Depende de este objeto') {
+        item.detail = `Campos: ${item.fields.join(', ')}`;
+      }
+    }
+
+    let detectedType = objectType?.toUpperCase();
+    if (!detectedType || detectedType === 'OBJECT') {
+      if (relationMap.has(cleanName)) {
+        detectedType = relationMap.get(cleanName)!;
+      } else {
+        detectedType = 'OBJECT';
+      }
+    }
+
+    return {
+      objectName: cleanName,
+      objectType: detectedType,
+      dependsOn: Array.from(dependsOnMap.values()),
+      dependedOnBy: Array.from(dependedOnByMap.values())
+    };
   }
 
   public async getTableDetails(tableName: string): Promise<any> {

@@ -337,6 +337,15 @@ ipcMain.handle('fb:get-object-ddl', async (_, type: string, name: string) => {
   }
 });
 
+ipcMain.handle('fb:get-object-dependencies', async (_, name: string, type?: string) => {
+  try {
+    const data = await firebirdService.getObjectDependencies(name, type);
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al obtener dependencias del objeto' };
+  }
+});
+
 // IPC: Queries
 ipcMain.handle('fb:execute-query', async (_, sql: string, maxRows?: number) => {
   try {

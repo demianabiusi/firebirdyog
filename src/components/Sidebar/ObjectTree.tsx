@@ -22,7 +22,8 @@ import {
   Trash2,
   FileText,
   Layers,
-  Check
+  Check,
+  Network
 } from 'lucide-react';
 
 interface SchemaObjects {
@@ -41,6 +42,7 @@ interface ObjectTreeProps {
   onRefresh: () => void;
   onSelectObjectSql: (sql: string, executeImmediately?: boolean) => void;
   onShowTableDetails: (tableName: string) => void;
+  onShowDependencies?: (objectName: string, objectType: string) => void;
   onEditObject: (type: 'PROCEDURE' | 'TRIGGER' | 'VIEW' | 'TABLE', name: string) => void;
   onCreateTable?: () => void;
   onDesignTable?: (tableName: string) => void;
@@ -100,6 +102,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
   onRefresh,
   onSelectObjectSql,
   onShowTableDetails,
+  onShowDependencies,
   onEditObject,
   onCreateTable,
   onDesignTable,
@@ -820,6 +823,19 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 <span>Ver Detalles e Índices...</span>
               </button>
 
+              {onShowDependencies && (
+                <button
+                  onClick={() => {
+                    onShowDependencies(contextMenu.name, 'TABLE');
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-cyan-400 rounded-md text-left transition-colors"
+                >
+                  <Network className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Ver Dependencias...</span>
+                </button>
+              )}
+
               {onDesignTable && (
                 <button
                   onClick={() => onDesignTable(contextMenu.name)}
@@ -905,6 +921,19 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 <span>Consultar Primeros 100</span>
               </button>
 
+              {onShowDependencies && (
+                <button
+                  onClick={() => {
+                    onShowDependencies(contextMenu.name, 'VIEW');
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-cyan-400 rounded-md text-left transition-colors"
+                >
+                  <Network className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Ver Dependencias...</span>
+                </button>
+              )}
+
               <button
                 onClick={() => onEditObject('VIEW', contextMenu.name)}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-teal-400 rounded-md text-left transition-colors"
@@ -963,6 +992,19 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 <Code className="w-3.5 h-3.5 text-amber-400" />
                 <span>Editar / Ver Código (DDL)</span>
               </button>
+
+              {onShowDependencies && (
+                <button
+                  onClick={() => {
+                    onShowDependencies(contextMenu.name, 'PROCEDURE');
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-cyan-400 rounded-md text-left transition-colors"
+                >
+                  <Network className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Ver Dependencias...</span>
+                </button>
+              )}
 
               <button
                 onClick={() => {
@@ -1032,6 +1074,19 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 <span>Editar / Ver Código (DDL)</span>
               </button>
 
+              {onShowDependencies && (
+                <button
+                  onClick={() => {
+                    onShowDependencies(contextMenu.name, 'TRIGGER');
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-cyan-400 rounded-md text-left transition-colors"
+                >
+                  <Network className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Ver Dependencias...</span>
+                </button>
+              )}
+
               <button
                 onClick={() => copyToClipboard(contextMenu.name)}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
@@ -1091,6 +1146,19 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                 <span>Incrementar en +1 (GEN_ID, 1)</span>
               </button>
 
+              {onShowDependencies && (
+                <button
+                  onClick={() => {
+                    onShowDependencies(contextMenu.name, 'GENERATOR');
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-cyan-400 rounded-md text-left transition-colors"
+                >
+                  <Network className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Ver Dependencias...</span>
+                </button>
+              )}
+
               <button
                 onClick={() => copyToClipboard(contextMenu.name)}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"
@@ -1112,6 +1180,19 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
           {/* DOMAIN / EXCEPTION Actions */}
           {(contextMenu.itemType === 'DOMAIN' || contextMenu.itemType === 'EXCEPTION') && (
             <div className="py-1 space-y-0.5">
+              {onShowDependencies && (
+                <button
+                  onClick={() => {
+                    onShowDependencies(contextMenu.name, contextMenu.itemType);
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-cyan-400 rounded-md text-left transition-colors"
+                >
+                  <Network className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Ver Dependencias...</span>
+                </button>
+              )}
+
               <button
                 onClick={() => copyToClipboard(contextMenu.name)}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-zinc-800 hover:text-zinc-100 rounded-md text-left transition-colors"

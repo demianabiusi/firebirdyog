@@ -62,6 +62,21 @@ export interface TableDetails {
   ddl?: string;
 }
 
+export interface ObjectDependencyItem {
+  objectName: string;
+  objectType: string;
+  fieldName?: string | null;
+  fields?: string[];
+  detail?: string;
+}
+
+export interface ObjectDependenciesResult {
+  objectName: string;
+  objectType: string;
+  dependsOn: ObjectDependencyItem[];
+  dependedOnBy: ObjectDependencyItem[];
+}
+
 export interface QueryResult {
   columns: string[];
   rows: Record<string, any>[];
@@ -133,6 +148,7 @@ export interface ElectronAPI {
   }>>;
   getTableDetails: (tableName: string) => Promise<IpcResponse<TableDetails>>;
   getObjectDdl: (type: string, name: string) => Promise<IpcResponse<{ ddl: string; name: string; type: string }>>;
+  getObjectDependencies: (objectName: string, objectType?: string) => Promise<IpcResponse<ObjectDependenciesResult>>;
   
   // Query execution
   executeQuery: (sql: string, maxRows?: number) => Promise<IpcResponse<QueryResult>>;

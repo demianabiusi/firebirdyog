@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TableDetails } from '../../types';
+import { TableDetails, ObjectDependenciesResult } from '../../types';
 import { 
   Table, 
   Key, 
@@ -9,22 +9,31 @@ import {
   X, 
   Copy, 
   Check, 
-  RefreshCw 
+  RefreshCw,
+  Network,
+  ExternalLink,
+  Eye,
+  Cog,
+  Tag
 } from 'lucide-react';
 
 interface TableDetailsModalProps {
   tableName: string | null;
   onClose: () => void;
+  onOpenDependencies?: (objectName: string, objectType: string) => void;
 }
 
 export const TableDetailsModal: React.FC<TableDetailsModalProps> = ({
   tableName,
-  onClose
+  onClose,
+  onOpenDependencies
 }) => {
   const [details, setDetails] = useState<TableDetails | null>(null);
+  const [dependencies, setDependencies] = useState<ObjectDependenciesResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingDeps, setIsLoadingDeps] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'columns' | 'indices' | 'triggers' | 'ddl'>('columns');
+  const [activeTab, setActiveTab] = useState<'columns' | 'indices' | 'triggers' | 'ddl' | 'dependencies'>('columns');
   const [copiedDdl, setCopiedDdl] = useState(false);
 
   useEffect(() => {
@@ -52,7 +61,24 @@ export const TableDetailsModal: React.FC<TableDetailsModalProps> = ({
       }
     };
 
+    const loadDeps = async () => {
+      setIsLoadingDeps(true);
+      try {
+        if (window.electronAPI?.getObjectDependencies) {
+          const res = await window.electronAPI.getObjectDependencies(tableName, 'TABLE');
+          if (res.success && res.data) {
+            setDependencies(res.data);
+          }
+        }
+      } catch (err) {
+        console.warn('Error loading table dependencies:', err);
+      } finally {
+        setIsLoadingDeps(false);
+      }
+    };
+
     loadDetails();
+    loadDeps();
   }, [tableName]);
 
   if (!tableName) return null;
@@ -64,6 +90,8 @@ export const TableDetailsModal: React.FC<TableDetailsModalProps> = ({
       setTimeout(() => setCopiedDdl(false), 1500);
     }
   };
+
+  const totalDepsCount = (dependencies?.dependsOn.length || 0) + (dependencies?.dependedOnBy.length || 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 select-none">
@@ -77,7 +105,7 @@ export const TableDetailsModal: React.FC<TableDetailsModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-zinc-100 font-mono">Tabla: {tableName}</h3>
-              <p className="text-[11px] text-zinc-400">Estructura de campos, índices, triggers y DDL</p>
+              <p className="text-[11px] text-zinc-400">Estructura de campos, índices, triggers, DDL y dependencias</p>
             </div>
           </div>
 
@@ -137,6 +165,18 @@ export const TableDetailsModal: React.FC<TableDetailsModalProps> = ({
           >
             <Code className="w-3.5 h-3.5" />
             <span>DDL Script</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('dependencies')}
+            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-medium transition-colors ${
+              activeTab === 'dependencies'
+                ? 'border-amber-500 text-amber-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Network className="w-3.5 h-3.5" />
+            <span>Dependencias {totalDepsCount > 0 ? `(${totalDepsCount})` : ''}</span>
           </button>
         </div>
 
@@ -289,6 +329,99 @@ export const TableDetailsModal: React.FC<TableDetailsModalProps> = ({
                     {copiedDdl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedDdl ? 'Copiado' : 'Copiar DDL'}</span>
                   </button>
+                </div>
+              )}
+
+              {/* Tab 5: Dependencies */}
+              {activeTab === 'dependencies' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
+                        Mapa de Dependencias de la Tabla
+                      </h4>
+                      <p className="text-[11px] text-zinc-400">
+                        Relaciones por Clave Foránea, Dominios, Triggers, Vistas y Procedimientos asociados
+                      </p>
+                    </div>
+
+                    {onOpenDependencies && (
+                      <button
+                        onClick={() => onOpenDependencies(tableName, 'TABLE')}
+                        className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 rounded-lg transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Abrir en Explorador Completo</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {isLoadingDeps ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-zinc-400 gap-2">
+                      <RefreshCw className="w-5 h-5 animate-spin text-amber-400" />
+                      <span className="text-xs">Consultando dependencias...</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Depende de */}
+                      <div className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-3">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-blue-400 pb-2 mb-2 border-b border-zinc-800">
+                          <Network className="w-3.5 h-3.5" />
+                          <span>Esta tabla depende de ({dependencies?.dependsOn.length || 0})</span>
+                        </div>
+                        <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                          {(!dependencies?.dependsOn || dependencies.dependsOn.length === 0) ? (
+                            <p className="text-xs text-zinc-500 italic py-6 text-center">
+                              No depende de ninguna otra tabla o dominio.
+                            </p>
+                          ) : (
+                            dependencies.dependsOn.map((dep, idx) => (
+                              <div key={idx} className="p-2 bg-zinc-900 rounded border border-zinc-800/80 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-mono font-bold text-zinc-200">{dep.objectName}</span>
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 uppercase font-semibold">
+                                    {dep.objectType}
+                                  </span>
+                                </div>
+                                {dep.detail && (
+                                  <p className="text-[11px] text-zinc-400 mt-0.5">{dep.detail}</p>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Utilizado por */}
+                      <div className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-3">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-400 pb-2 mb-2 border-b border-zinc-800">
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Objetos que dependen de esta tabla ({dependencies?.dependedOnBy.length || 0})</span>
+                        </div>
+                        <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                          {(!dependencies?.dependedOnBy || dependencies.dependedOnBy.length === 0) ? (
+                            <p className="text-xs text-zinc-500 italic py-6 text-center">
+                              Ningún otro objeto depende directamente de esta tabla.
+                            </p>
+                          ) : (
+                            dependencies.dependedOnBy.map((dep, idx) => (
+                              <div key={idx} className="p-2 bg-zinc-900 rounded border border-zinc-800/80 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-mono font-bold text-zinc-200">{dep.objectName}</span>
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 uppercase font-semibold">
+                                    {dep.objectType}
+                                  </span>
+                                </div>
+                                {dep.detail && (
+                                  <p className="text-[11px] text-zinc-400 mt-0.5">{dep.detail}</p>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>

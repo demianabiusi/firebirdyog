@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { useTranslation } from '../../i18n/I18nContext';
 import { useTheme } from '../../theme/ThemeContext';
@@ -55,6 +55,26 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
     schemaRef.current = schema;
   }, [schema]);
 
+  const [acceptOnEnter, setAcceptOnEnter] = useState<'off' | 'smart'>(() => {
+    return (localStorage.getItem('firebirdyog_autocomplete_enter') as 'off' | 'smart') || 'off';
+  });
+
+  const handleToggleAcceptOnEnter = () => {
+    setAcceptOnEnter(prev => {
+      const next = prev === 'off' ? 'smart' : 'off';
+      localStorage.setItem('firebirdyog_autocomplete_enter', next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.updateOptions({
+        acceptSuggestionOnEnter: acceptOnEnter
+      });
+    }
+  }, [acceptOnEnter]);
+
   const completionDisposableRef = useRef<any>(null);
 
   useEffect(() => {
@@ -70,6 +90,31 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
     editorRef.current = editor;
     monacoRef.current = monaco;
 
+    // Configure SQL language rules: neutralize onEnterRules to prevent unwanted newlines / indent jumps
+    monaco.languages.setLanguageConfiguration('sql', {
+      comments: {
+        lineComment: '--',
+        blockComment: ['/*', '*/']
+      },
+      brackets: [
+        ['[', ']'],
+        ['(', ')']
+      ],
+      autoClosingPairs: [
+        { open: '(', close: ')' },
+        { open: '[', close: ']' },
+        { open: "'", close: "'", notIn: ['string', 'comment'] },
+        { open: '"', close: '"', notIn: ['string'] }
+      ],
+      surroundingPairs: [
+        { open: '(', close: ')' },
+        { open: '[', close: ']' },
+        { open: "'", close: "'" },
+        { open: '"', close: '"' }
+      ],
+      onEnterRules: [] // Neutralize Monaco's aggressive SQL onEnterRules
+    });
+
     // Custom Firebird SQL Autocompletions with table & column intelligence
     if (completionDisposableRef.current) {
       completionDisposableRef.current.dispose();
@@ -77,7 +122,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
 
     completionDisposableRef.current = monaco.languages.registerCompletionItemProvider('sql', {
       triggerCharacters: ['.'],
-      provideCompletionItems: (model: any, position: any) => {
+      provideCompletionItems: (model: any, position: any, context: any) => {
         const lineContent = model.getLineContent(position.lineNumber);
         const textUntilPosition = lineContent.substring(0, position.column - 1);
 
@@ -94,6 +139,12 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           startColumn: word.startColumn,
           endColumn: word.endColumn
         };
+
+        // Don't show automatic popups on empty spaces / empty line unless explicitly invoked via Ctrl+Space or after dot
+        const isManualInvoke = context?.triggerKind === monaco.languages.CompletionTriggerKind?.Invoke;
+        if (!dotMatch && word.word.trim().length === 0 && !isManualInvoke) {
+          return { suggestions: [] };
+        }
 
         if (dotMatch) {
           const rawQualifier = dotMatch[1].replace(/["']/g, '');
@@ -139,24 +190,29 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
         }
 
         // Default suggestions when not immediately following a dot
+        // Clean Firebird single-token keywords (avoids multi-word spacing and replacement glitches)
         const firebirdKeywords = [
-          'SELECT', 'FROM', 'WHERE', 'INSERT INTO', 'UPDATE', 'DELETE', 'JOIN', 'LEFT JOIN',
-          'RIGHT JOIN', 'INNER JOIN', 'FULL JOIN', 'GROUP BY', 'ORDER BY', 'HAVING',
-          'ROWS', 'FIRST', 'SKIP', 'CREATE TABLE', 'ALTER TABLE', 'DROP TABLE',
-          'CREATE PROCEDURE', 'CREATE TRIGGER', 'CREATE GENERATOR', 'CREATE DOMAIN',
-          'GEN_ID', 'NEXT VALUE FOR', 'EXTRACT', 'COALESCE', 'CAST', 'IIF', 'LIST',
-          'EXECUTE STATEMENT', 'EXECUTE PROCEDURE', 'SUSPEND', 'BEGIN', 'END',
+          'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE',
+          'JOIN', 'LEFT', 'RIGHT', 'INNER', 'FULL', 'OUTER', 'CROSS', 'NATURAL',
+          'GROUP', 'ORDER', 'BY', 'HAVING', 'ROWS', 'FIRST', 'SKIP', 'OFFSET',
+          'CREATE', 'ALTER', 'DROP', 'RECREATE', 'TABLE', 'VIEW', 'PROCEDURE', 'TRIGGER',
+          'GENERATOR', 'SEQUENCE', 'DOMAIN', 'EXCEPTION', 'INDEX', 'CONSTRAINT',
+          'GEN_ID', 'NEXT', 'VALUE', 'FOR', 'EXTRACT', 'COALESCE', 'CAST', 'IIF', 'LIST',
+          'EXECUTE', 'STATEMENT', 'SUSPEND', 'BEGIN', 'END', 'AS', 'DISTINCT',
+          'UNION', 'ALL', 'RETURNING', 'PLAN', 'CASE', 'WHEN', 'THEN', 'ELSE',
+          'VARCHAR', 'CHAR', 'INTEGER', 'SMALLINT', 'BIGINT', 'NUMERIC', 'DECIMAL',
+          'DOUBLE', 'PRECISION', 'FLOAT', 'DATE', 'TIME', 'TIMESTAMP', 'BLOB',
+          'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'NOT', 'NULL', 'DEFAULT', 'UNIQUE', 'CHECK',
+          'AND', 'OR', 'IN', 'EXISTS', 'LIKE', 'STARTING', 'WITH', 'CONTAINING', 'BETWEEN', 'IS',
           'RDB$DATABASE', 'RDB$RELATIONS', 'RDB$RELATION_FIELDS', 'RDB$PROCEDURES',
-          'RDB$TRIGGERS', 'RDB$GENERATORS', 'VARCHAR', 'INTEGER', 'SMALLINT', 'BIGINT',
-          'DOUBLE PRECISION', 'FLOAT', 'DATE', 'TIME', 'TIMESTAMP', 'BLOB SUB_TYPE TEXT',
-          'PRIMARY KEY', 'FOREIGN KEY', 'REFERENCES', 'NOT NULL', 'DEFAULT', 'UNIQUE',
-          'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'LIKE', 'BETWEEN', 'IS NULL', 'IS NOT NULL'
+          'RDB$TRIGGERS', 'RDB$GENERATORS'
         ];
 
         const keywordSuggestions = firebirdKeywords.map((kw) => ({
           label: kw,
           kind: monaco.languages.CompletionItemKind.Keyword,
           insertText: kw,
+          sortText: '4_' + kw,
           range
         }));
 
@@ -165,6 +221,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           kind: monaco.languages.CompletionItemKind.Class,
           insertText: tbl,
           detail: 'Tabla',
+          sortText: '1_' + tbl,
           range
         }));
 
@@ -173,6 +230,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           kind: monaco.languages.CompletionItemKind.Interface,
           insertText: vw,
           detail: 'Vista',
+          sortText: '1_' + vw,
           range
         }));
 
@@ -183,6 +241,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
             kind: monaco.languages.CompletionItemKind.Function,
             insertText: name,
             detail: 'Procedimiento',
+            sortText: '2_' + name,
             range
           };
         });
@@ -204,6 +263,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           kind: monaco.languages.CompletionItemKind.Field,
           insertText: col,
           detail: 'Campo',
+          sortText: '3_' + col,
           range
         }));
 
@@ -367,6 +427,24 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
             <ArrowLeftRight className="w-3 h-3" />
             <span>{swapF9F5 ? 'F5=Ejecutar' : 'F9=Ejecutar'}</span>
           </button>
+
+          {/* Autocomplete Enter toggle */}
+          <button
+            onClick={handleToggleAcceptOnEnter}
+            title={
+              acceptOnEnter === 'off'
+                ? 'Modo seguro: Enter solo inserta salto de línea; Tab autocompleta. Clic para cambiar.'
+                : 'Modo rápido: Enter autocompleta sugerencias. Clic para cambiar.'
+            }
+            className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[11px] font-mono font-semibold transition-colors ${
+              acceptOnEnter === 'off'
+                ? 'bg-zinc-800/60 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-200'
+                : 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+            }`}
+          >
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>{acceptOnEnter === 'off' ? 'Tab=Completar' : 'Enter=Completar'}</span>
+          </button>
         </div>
 
         {/* Right: row limit */}
@@ -411,7 +489,15 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
             tabSize: 2,
             wordWrap: 'on',
             suggestOnTriggerCharacters: true,
-            quickSuggestions: true,
+            quickSuggestions: {
+              other: true,
+              comments: false,
+              strings: false
+            },
+            acceptSuggestionOnEnter: acceptOnEnter,
+            tabCompletion: 'on',
+            wordBasedSuggestions: 'off',
+            autoIndent: 'keep',
             renderLineHighlight: 'all',
             padding: { top: 8, bottom: 8 }
           }}

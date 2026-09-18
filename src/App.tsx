@@ -12,6 +12,7 @@ import { TableDesignerModal } from './components/Modals/TableDesignerModal';
 import { DumpDatabaseModal } from './components/Modals/DumpDatabaseModal';
 import { ImportDatabaseModal } from './components/Modals/ImportDatabaseModal';
 import { CompareDatabaseModal } from './components/Modals/CompareDatabaseModal';
+import { ObjectDependenciesModal } from './components/Modals/ObjectDependenciesModal';
 import { Database, Plus, Sparkles } from 'lucide-react';
 import { useConnectionWorkspace } from './hooks/useConnectionWorkspace';
 
@@ -103,6 +104,7 @@ export const App: React.FC = () => {
 
   // Modals
   const [selectedTableForDetails, setSelectedTableForDetails] = useState<string | null>(null);
+  const [selectedObjectForDependencies, setSelectedObjectForDependencies] = useState<{ name: string; type: string } | null>(null);
 
   // Active Tab helper
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
@@ -670,6 +672,7 @@ END;
               onRefresh={refreshSchema}
               onSelectObjectSql={handleSelectObjectSql}
               onShowTableDetails={(tbl) => setSelectedTableForDetails(tbl)}
+              onShowDependencies={(name, type) => setSelectedObjectForDependencies({ name, type })}
               onEditObject={handleEditObject}
               onCreateTable={handleOpenCreateTable}
               onDesignTable={handleOpenDesignTable}
@@ -829,7 +832,19 @@ END;
       <TableDetailsModal
         tableName={selectedTableForDetails}
         onClose={() => setSelectedTableForDetails(null)}
+        onOpenDependencies={(name, type) => setSelectedObjectForDependencies({ name, type })}
       />
+
+      {/* Object Dependencies Modal */}
+      {selectedObjectForDependencies && (
+        <ObjectDependenciesModal
+          objectName={selectedObjectForDependencies.name}
+          objectType={selectedObjectForDependencies.type}
+          onClose={() => setSelectedObjectForDependencies(null)}
+          onSelectObjectSql={handleSelectObjectSql}
+          onEditObject={handleEditObject}
+        />
+      )}
 
       {/* Database Dump / Export Modal */}
       <DumpDatabaseModal
