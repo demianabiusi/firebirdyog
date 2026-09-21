@@ -365,6 +365,15 @@ ipcMain.handle('fb:execute-script', async (_, script: string) => {
   }
 });
 
+ipcMain.handle('fb:update-table-rows', async (_, tableName: string, updates: any[]) => {
+  try {
+    const data = await firebirdService.updateTableRows(tableName, updates);
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al actualizar filas' };
+  }
+});
+
 // IPC: Dialogs
 ipcMain.handle('dialog:select-database-file', async () => {
   if (!mainWindow) return null;

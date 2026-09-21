@@ -21,6 +21,7 @@ interface OutputPanelProps {
   history: QueryHistoryItem[];
   onSelectHistorySql: (sql: string) => void;
   onClearHistory: () => void;
+  schemaObjects?: any;
 }
 
 export const OutputPanel: React.FC<OutputPanelProps> = ({
@@ -31,7 +32,8 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
   onSelectTab,
   history,
   onSelectHistorySql,
-  onClearHistory
+  onClearHistory,
+  schemaObjects
 }) => {
   const { t } = useTranslation();
 
@@ -99,7 +101,7 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
       {/* Tab Contents */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'grid' && (
-          <DataGrid result={result} isRunning={isRunning} />
+          <DataGrid result={result} isRunning={isRunning} schemaObjects={schemaObjects} />
         )}
 
         {activeTab === 'messages' && (

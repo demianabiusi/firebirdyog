@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   executeQuery: (sql: string, maxRows?: number) => ipcRenderer.invoke('fb:execute-query', sql, maxRows),
   executeScript: (script: string) => ipcRenderer.invoke('fb:execute-script', script),
+  updateTableRows: (tableName: string, updates: any[]) => ipcRenderer.invoke('fb:update-table-rows', tableName, updates),
   
   selectDatabaseFile: () => ipcRenderer.invoke('dialog:select-database-file'),
   selectNewDatabaseFile: (defaultFilename?: string) => ipcRenderer.invoke('dialog:select-new-database-file', defaultFilename),

@@ -491,6 +491,175 @@ export class FirebirdService {
     };
   }
 
+  public async updateTableRows(
+    tableName: string,
+    updates: Array<{
+      primaryKeyValues: Record<string, any>;
+      updatedValues: Record<string, any>;
+    }>
+  ): Promise<{ affectedRows: number }> {
+    if (!this.activeDb) {
+      throw new Error('No hay conexión activa a la base de datos Firebird.');
+    }
+
+    if (!tableName || !tableName.trim()) {
+      throw new Error('Nombre de tabla inválido.');
+    }
+
+    if (!updates || updates.length === 0) {
+      return { affectedRows: 0 };
+    }
+
+    const cleanTableName = tableName.trim().toUpperCase();
+    const tableDetails = await this.getTableDetails(cleanTableName);
+
+    if (!tableDetails || !tableDetails.columns || tableDetails.columns.length === 0) {
+      throw new Error(`No se encontró la tabla "${cleanTableName}" en la base de datos.`);
+    }
+
+    const columnMap = new Map<string, any>();
+    tableDetails.columns.forEach((c: any) => columnMap.set(c.columnName.toUpperCase(), c));
+
+    const pkColumns = tableDetails.columns
+      .filter((c: any) => c.isPrimaryKey)
+      .map((c: any) => c.columnName.toUpperCase());
+
+    if (pkColumns.length === 0) {
+      throw new Error(
+        `La tabla "${cleanTableName}" no posee una Clave Primaria (Primary Key) definida. Por seguridad e integridad de datos, no se permiten ediciones directas.`
+      );
+    }
+
+    const castValue = (colName: string, val: any): any => {
+      if (val === null || val === undefined) return null;
+      const col = columnMap.get(colName.toUpperCase());
+      const fieldType = (col?.fieldType || '').toUpperCase();
+
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed.toUpperCase() === '(NULL)' || trimmed.toUpperCase() === 'NULL' || (trimmed === '' && col?.isNullable)) {
+          return null;
+        }
+
+        if (
+          fieldType.includes('INT') ||
+          fieldType.includes('SMALLINT') ||
+          fieldType.includes('BIGINT')
+        ) {
+          if (trimmed === '') return col?.isNullable ? null : 0;
+          const parsed = parseInt(trimmed, 10);
+          return isNaN(parsed) ? val : parsed;
+        }
+
+        if (
+          fieldType.includes('FLOAT') ||
+          fieldType.includes('DOUBLE') ||
+          fieldType.includes('NUMERIC') ||
+          fieldType.includes('DECIMAL')
+        ) {
+          if (trimmed === '') return col?.isNullable ? null : 0;
+          const parsed = parseFloat(trimmed.replace(',', '.'));
+          return isNaN(parsed) ? val : parsed;
+        }
+
+        if (fieldType.includes('BOOLEAN')) {
+          if (trimmed === '') return col?.isNullable ? null : false;
+          return trimmed.toLowerCase() === 'true' || trimmed === '1';
+        }
+
+        return val;
+      }
+
+      return val;
+    };
+
+    const isolation = (Firebird as any).ISOLATION_READ_COMMITTED || (FirebirdRaw as any).ISOLATION_READ_COMMITTED;
+
+    return new Promise((resolve, reject) => {
+      const executeUpdates = (dbOrTx: any, isTx: boolean) => {
+        (async () => {
+          let totalAffected = 0;
+
+          for (const update of updates) {
+            const setEntries = Object.entries(update.updatedValues);
+            if (setEntries.length === 0) continue;
+
+            const setClauses: string[] = [];
+            const queryParams: any[] = [];
+
+            for (const [rawCol, rawVal] of setEntries) {
+              const matchedCol = tableDetails.columns.find(
+                (c: any) => c.columnName.toUpperCase() === rawCol.toUpperCase()
+              );
+              const exactColName = matchedCol ? matchedCol.columnName : rawCol.toUpperCase();
+
+              setClauses.push(`"${exactColName.replace(/"/g, '""')}" = ?`);
+              queryParams.push(castValue(exactColName, rawVal));
+            }
+
+            const whereClauses: string[] = [];
+            for (const pkCol of pkColumns) {
+              const matchedPk = tableDetails.columns.find(
+                (c: any) => c.columnName.toUpperCase() === pkCol.toUpperCase()
+              );
+              const exactPkName = matchedPk ? matchedPk.columnName : pkCol.toUpperCase();
+
+              const pkMatchKey = Object.keys(update.primaryKeyValues).find(
+                (k) => k.toUpperCase() === pkCol
+              );
+
+              if (!pkMatchKey || update.primaryKeyValues[pkMatchKey] === undefined) {
+                throw new Error(
+                  `Falta el valor de la clave primaria "${exactPkName}" para identificar unívocamente la fila.`
+                );
+              }
+
+              whereClauses.push(`"${exactPkName.replace(/"/g, '""')}" = ?`);
+              queryParams.push(castValue(exactPkName, update.primaryKeyValues[pkMatchKey]));
+            }
+
+            const exactTableName = tableDetails.tableName || cleanTableName;
+            const sql = `UPDATE "${exactTableName.replace(/"/g, '""')}" SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')}`;
+
+            await new Promise<void>((stmtRes, stmtRej) => {
+              dbOrTx.query(sql, queryParams, (qErr: any, qRes: any) => {
+                if (qErr) return stmtRej(qErr);
+                totalAffected += typeof qRes === 'number' ? qRes : 1;
+                stmtRes();
+              });
+            });
+          }
+
+          if (isTx) {
+            dbOrTx.commit((cErr: any) => {
+              if (cErr) return reject(cErr);
+              resolve({ affectedRows: totalAffected });
+            });
+          } else {
+            resolve({ affectedRows: totalAffected });
+          }
+        })().catch((err) => {
+          if (isTx) {
+            dbOrTx.rollback(() => {
+              reject(err);
+            });
+          } else {
+            reject(err);
+          }
+        });
+      };
+
+      if (typeof (this.activeDb as any).transaction === 'function') {
+        (this.activeDb as any).transaction(isolation, (tErr: any, tx: any) => {
+          if (tErr) return reject(tErr);
+          executeUpdates(tx, true);
+        });
+      } else {
+        executeUpdates(this.activeDb, false);
+      }
+    });
+  }
+
   private extractString(row: any, ...keys: string[]): string {
     if (!row || typeof row !== 'object') return '';
     for (const key of keys) {

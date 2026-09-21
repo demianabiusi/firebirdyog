@@ -87,6 +87,11 @@ export interface QueryResult {
   hasMore?: boolean;
 }
 
+export interface TableRowUpdate {
+  primaryKeyValues: Record<string, any>;
+  updatedValues: Record<string, any>;
+}
+
 export interface QueryTab {
   id: string;
   title: string;
@@ -150,9 +155,10 @@ export interface ElectronAPI {
   getObjectDdl: (type: string, name: string) => Promise<IpcResponse<{ ddl: string; name: string; type: string }>>;
   getObjectDependencies: (objectName: string, objectType?: string) => Promise<IpcResponse<ObjectDependenciesResult>>;
   
-  // Query execution
+  // Query execution & data modification
   executeQuery: (sql: string, maxRows?: number) => Promise<IpcResponse<QueryResult>>;
   executeScript: (script: string) => Promise<IpcResponse<{ statementsExecuted: number; results: QueryResult[] }>>;
+  updateTableRows: (tableName: string, updates: TableRowUpdate[]) => Promise<IpcResponse<{ affectedRows: number }>>;
   
   // File dialogs & utilities
   selectDatabaseFile: () => Promise<string | null>;

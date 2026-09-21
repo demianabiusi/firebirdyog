@@ -115,7 +115,16 @@
     "historyEmpty": "Query execution history is empty.",
     "copyCell": "Copy Cell",
     "copyRowJson": "Copy Row (JSON)",
-    "copyRowCsv": "Copy Row (CSV)"
+    "copyRowCsv": "Copy Row (CSV)",
+    "editable": "Editable",
+    "readOnly": "Read only",
+    "rowsModified": "modified row(s)",
+    "pendingChangesNotice": "Changes have not yet been applied to the database.",
+    "saveChanges": "Save changes",
+    "discardChanges": "Discard",
+    "saving": "Saving...",
+    "saveSuccess": "Row(s) successfully updated in Firebird.",
+    "pkProtected": "Primary key columns are protected from direct inline editing."
   },
   "connectionModal": {
     "title": "Firebird Connections",

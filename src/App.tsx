@@ -793,6 +793,7 @@ END;
               history={history}
               onSelectHistorySql={(sql) => handleSqlChange(sql)}
               onClearHistory={() => setHistory([])}
+              schemaObjects={schemaObjects}
             />
           </div>
 

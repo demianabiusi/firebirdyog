@@ -115,7 +115,16 @@
     "historyEmpty": "El historial de consultas ejecutadas está vacío.",
     "copyCell": "Copiar Celda",
     "copyRowJson": "Copiar Fila (JSON)",
-    "copyRowCsv": "Copiar Fila (CSV)"
+    "copyRowCsv": "Copiar Fila (CSV)",
+    "editable": "Editable",
+    "readOnly": "Solo lectura",
+    "rowsModified": "fila(s) modificada(s)",
+    "pendingChangesNotice": "Los cambios aún no impactaron en la base de datos.",
+    "saveChanges": "Guardar cambios",
+    "discardChanges": "Descartar",
+    "saving": "Guardando...",
+    "saveSuccess": "Fila(s) actualizada(s) correctamente en Firebird.",
+    "pkProtected": "Las columnas de clave primaria están protegidas contra edición directa."
   },
   "connectionModal": {
     "title": "Conexiones a Firebird",
