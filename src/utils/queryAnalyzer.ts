@@ -32,6 +32,19 @@ export function analyzeQueryCandidate(sql: string): QueryCandidate {
   // Trim and collapse whitespace
   sanitized = sanitized.trim();
 
+  // Explicit check for EXECUTE PROCEDURE
+  if (/^\s*EXECUTE\s+PROCEDURE\b/i.test(sanitized)) {
+    const match = sanitized.match(/^\s*EXECUTE\s+PROCEDURE\s+([a-zA-Z0-9_$#"]+)/i);
+    const procName = match ? match[1].replace(/^"|"$/g, '').trim().toUpperCase() : '';
+    return {
+      isCandidate: false,
+      tableName: procName || null,
+      reason: procName
+        ? `"${procName}" es un procedimiento almacenado (los procedimientos son de solo lectura)`
+        : 'Los procedimientos almacenados son de solo lectura'
+    };
+  }
+
   // 4. Must start with SELECT (not INSERT, UPDATE, DELETE, EXECUTE, WITH, SHOW, etc.)
   if (!/^\s*SELECT\b/i.test(sanitized)) {
     return { isCandidate: false, tableName: null, reason: 'Solo consultas SELECT son editables' };
@@ -68,6 +81,17 @@ export function analyzeQueryCandidate(sql: string): QueryCandidate {
     return { isCandidate: false, tableName: null, reason: 'Cláusula FROM vacía' };
   }
 
+  // Check if FROM is a procedure call with arguments: FROM SP_NAME(...)
+  const procCallMatch = fromClause.match(/^([a-zA-Z0-9_$#"]+)\s*\(/);
+  if (procCallMatch) {
+    const procName = procCallMatch[1].replace(/^"|"$/g, '').trim().toUpperCase();
+    return {
+      isCandidate: false,
+      tableName: procName,
+      reason: `"${procName}" es un procedimiento almacenado (los procedimientos son de solo lectura)`
+    };
+  }
+
   if (fromClause.includes(',') || fromClause.includes('(')) {
     return { isCandidate: false, tableName: null, reason: 'Consultas con múltiples tablas o subconsultas en FROM no son editables' };
   }
@@ -99,7 +123,7 @@ export function analyzeQueryCandidate(sql: string): QueryCandidate {
 export async function checkQueryUpdatability(
   sql: string,
   resultColumns: string[],
-  schemaObjects?: { tables?: string[]; views?: string[] } | null
+  schemaObjects?: { tables?: string[]; views?: string[]; procedures?: Array<{ name: string } | string> } | null
 ): Promise<QueryUpdatability> {
   const candidate = analyzeQueryCandidate(sql);
   if (!candidate.isCandidate || !candidate.tableName) {
@@ -120,6 +144,19 @@ export async function checkQueryUpdatability(
       tableName,
       primaryKeyColumns: [],
       readOnlyReason: `"${tableName}" es una vista (las vistas son de solo lectura)`
+    };
+  }
+
+  // Check if it is a stored procedure
+  if (schemaObjects?.procedures?.some((p: any) => {
+    const name = typeof p === 'string' ? p : p.name;
+    return name?.toUpperCase() === tableName;
+  })) {
+    return {
+      isUpdatable: false,
+      tableName,
+      primaryKeyColumns: [],
+      readOnlyReason: `"${tableName}" es un procedimiento almacenado (los procedimientos son de solo lectura)`
     };
   }
 
