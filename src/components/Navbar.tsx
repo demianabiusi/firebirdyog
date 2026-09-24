@@ -1,24 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import appIconUrl from '../../public/icon.svg';
 import { ConnectionConfig } from '../types';
 import { useTranslation } from '../i18n/I18nContext';
 import { useTheme } from '../theme/ThemeContext';
 import { 
-  Flame, 
   Database, 
   Unplug, 
-  Settings2, 
   PlusCircle, 
-  HelpCircle,
-  CheckCircle2,
-  AlertCircle,
-  Download,
-  Upload,
-  Globe,
-  ChevronDown,
-  GitCompare,
-  Sun,
-  Moon
+  Download, 
+  Upload, 
+  Globe, 
+  ChevronDown, 
+  GitCompare, 
+  Sun, 
+  Moon,
+  Wrench,
+  Check
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -46,16 +43,44 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { t, language, setLanguage, availableLanguages } = useTranslation();
   const { theme, toggleTheme } = useTheme();
-  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+  
+  // Single open menu state guarantees only one menu is active at a time
+  const [openMenu, setOpenMenu] = useState<'tools' | 'database' | 'language' | null>(null);
+
+  // Close menus on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMenu(null);
+      }
+    };
+    if (openMenu) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [openMenu]);
 
   const currentLang = availableLanguages.find(l => l.code === language) || availableLanguages[0];
 
+  const toggleMenu = (menu: 'tools' | 'database' | 'language') => {
+    setOpenMenu(prev => (prev === menu ? null : menu));
+  };
+
   return (
-    <header className="h-12 bg-zinc-950 border-b border-zinc-800/90 flex items-center justify-between px-4 select-none shrink-0">
+    <header className="h-12 bg-zinc-950 border-b border-zinc-800/90 flex items-center justify-between px-4 select-none shrink-0 relative">
       
-      {/* Brand & App Title */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
+      {/* Invisible backdrop to dismiss open dropdown on outside click */}
+      {openMenu && (
+        <div 
+          className="fixed inset-0 z-40 bg-transparent" 
+          onClick={() => setOpenMenu(null)} 
+        />
+      )}
+
+      {/* Brand & Left Actions */}
+      <div className="flex items-center gap-2.5">
+        {/* Brand */}
+        <div className="flex items-center gap-2 mr-1">
           <img 
             src={appIconUrl} 
             alt="Firebird Logo" 
@@ -71,53 +96,142 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        <div className="h-5 w-px bg-zinc-800 mx-2" />
+        <div className="h-5 w-px bg-zinc-800 mx-1" />
 
         {/* Quick query tab action */}
         <button
           onClick={onNewQuery}
-          className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs rounded border border-zinc-800 transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs rounded-lg border border-zinc-800 transition-colors shadow-xs cursor-pointer"
           title={t('navbar.newQueryTooltip')}
         >
           <PlusCircle className="w-3.5 h-3.5 text-amber-400" />
           <span>{t('navbar.newQuery')}</span>
         </button>
 
-        {/* Dump / Export DB Action */}
-        {isConnected && onOpenDumpModal && (
+        {/* Menú Desplegable: Herramientas (Tools) */}
+        <div className="relative">
           <button
-            onClick={onOpenDumpModal}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-amber-300 hover:text-amber-200 text-xs rounded border border-zinc-800 hover:border-amber-500/30 transition-colors"
-            title={t('navbar.exportDumpTooltip')}
+            type="button"
+            onClick={() => toggleMenu('tools')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+              openMenu === 'tools'
+                ? 'bg-zinc-800 border-amber-500/40 text-amber-300 shadow-sm'
+                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300'
+            }`}
+            title={t('navbar.toolsTooltip')}
           >
-            <Download className="w-3.5 h-3.5 text-amber-400" />
-            <span>{t('navbar.exportDump')}</span>
+            <Wrench className="w-3.5 h-3.5 text-amber-400" />
+            <span>{t('navbar.tools')}</span>
+            <ChevronDown className={`w-3 h-3 text-zinc-500 transition-transform duration-150 ${openMenu === 'tools' ? 'rotate-180 text-amber-400' : ''}`} />
           </button>
-        )}
 
-        {/* Import Dump Action */}
-        {isConnected && onOpenImportModal && (
-          <button
-            onClick={onOpenImportModal}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-blue-300 hover:text-blue-200 text-xs rounded border border-zinc-800 hover:border-blue-500/30 transition-colors"
-            title={t('navbar.importSqlTooltip')}
-          >
-            <Upload className="w-3.5 h-3.5 text-blue-400" />
-            <span>{t('navbar.importSql')}</span>
-          </button>
-        )}
+          {openMenu === 'tools' && (
+            <div className="absolute left-0 mt-1.5 z-50 w-72 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl p-1.5 divide-y divide-zinc-800/60 animate-in fade-in zoom-in-95 duration-100">
+              <div className="py-1 space-y-0.5">
+                {/* Exportar Dump SQL */}
+                {onOpenDumpModal && (
+                  <button
+                    type="button"
+                    disabled={!isConnected}
+                    onClick={() => {
+                      if (isConnected) {
+                        setOpenMenu(null);
+                        onOpenDumpModal();
+                      }
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors group ${
+                      isConnected 
+                        ? 'hover:bg-zinc-800 text-zinc-200 cursor-pointer' 
+                        : 'opacity-50 cursor-not-allowed text-zinc-500'
+                    }`}
+                    title={!isConnected ? t('navbar.requiresConnection') : t('navbar.exportDumpTooltip')}
+                  >
+                    <div className="p-1.5 rounded-md bg-amber-500/10 text-amber-400 shrink-0">
+                      <Download className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-zinc-200 group-hover:text-zinc-100 flex items-center justify-between">
+                        <span>{t('navbar.exportDump')}</span>
+                        {!isConnected && (
+                          <span className="text-[9px] px-1 py-0.2 bg-zinc-800 text-zinc-500 rounded">
+                            {t('navbar.requiresConnection')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 truncate">
+                        {t('navbar.exportDumpDesc')}
+                      </div>
+                    </div>
+                  </button>
+                )}
 
-        {/* Compare Databases Action */}
-        {onOpenCompareModal && (
-          <button
-            onClick={onOpenCompareModal}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-purple-300 hover:text-purple-200 text-xs rounded border border-zinc-800 hover:border-purple-500/30 transition-colors"
-            title={t('navbar.compareDbTooltip')}
-          >
-            <GitCompare className="w-3.5 h-3.5 text-purple-400" />
-            <span>{t('navbar.compareDb')}</span>
-          </button>
-        )}
+                {/* Importar Dump SQL */}
+                {onOpenImportModal && (
+                  <button
+                    type="button"
+                    disabled={!isConnected}
+                    onClick={() => {
+                      if (isConnected) {
+                        setOpenMenu(null);
+                        onOpenImportModal();
+                      }
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors group ${
+                      isConnected 
+                        ? 'hover:bg-zinc-800 text-zinc-200 cursor-pointer' 
+                        : 'opacity-50 cursor-not-allowed text-zinc-500'
+                    }`}
+                    title={!isConnected ? t('navbar.requiresConnection') : t('navbar.importSqlTooltip')}
+                  >
+                    <div className="p-1.5 rounded-md bg-blue-500/10 text-blue-400 shrink-0">
+                      <Upload className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-zinc-200 group-hover:text-zinc-100 flex items-center justify-between">
+                        <span>{t('navbar.importSql')}</span>
+                        {!isConnected && (
+                          <span className="text-[9px] px-1 py-0.2 bg-zinc-800 text-zinc-500 rounded">
+                            {t('navbar.requiresConnection')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 truncate">
+                        {t('navbar.importSqlDesc')}
+                      </div>
+                    </div>
+                  </button>
+                )}
+              </div>
+
+              {/* Comparar Bases de Datos */}
+              {onOpenCompareModal && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(null);
+                      onOpenCompareModal();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-200 cursor-pointer transition-colors group"
+                    title={t('navbar.compareDbTooltip')}
+                  >
+                    <div className="p-1.5 rounded-md bg-purple-500/10 text-purple-400 shrink-0">
+                      <GitCompare className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-zinc-200 group-hover:text-zinc-100">
+                        {t('navbar.compareDb')}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 truncate">
+                        {t('navbar.compareDbDesc')}
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Center Status: Connected Database */}
@@ -144,100 +258,168 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
       </div>
 
-      {/* Right Connection Controls & Language Switcher */}
+      {/* Right Connection Controls & Settings */}
       <div className="flex items-center gap-2">
         
-        {/* Language Selector Dropdown */}
+        {/* Menú Desplegable: Base de Datos */}
         <div className="relative">
           <button
             type="button"
-            onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-            className="flex items-center gap-1 px-2 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-lg text-xs font-medium transition-colors"
-            title={t('navbar.language')}
+            onClick={() => toggleMenu('database')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors shadow-xs cursor-pointer ${
+              isConnected
+                ? openMenu === 'database'
+                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                  : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200'
+                : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300'
+            }`}
+            title={t('navbar.databaseTooltip')}
           >
-            <Globe className="w-3.5 h-3.5 text-amber-400" />
-            <span>{currentLang.flag}</span>
-            <span className="text-[11px] uppercase font-bold">{currentLang.code}</span>
-            <ChevronDown className="w-3 h-3 text-zinc-500" />
+            <Database className={`w-3.5 h-3.5 ${isConnected ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <span>{isConnected ? t('navbar.database') : t('navbar.connect')}</span>
+            <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform duration-150 ${openMenu === 'database' ? 'rotate-180' : ''}`} />
           </button>
 
-          {isLangMenuOpen && (
-            <>
-              <div 
-                className="fixed inset-0 z-40" 
-                onClick={() => setIsLangMenuOpen(false)} 
-              />
-              <div className="absolute right-0 mt-1.5 z-50 w-32 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-xl py-1 divide-y divide-zinc-800/60 animate-in fade-in zoom-in-95 duration-100">
+          {openMenu === 'database' && (
+            <div className="absolute right-0 mt-1.5 z-50 w-72 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl p-1.5 divide-y divide-zinc-800/60 animate-in fade-in zoom-in-95 duration-100">
+              <div className="py-1 space-y-0.5">
+                {/* Conectar / Cambiar Conexión */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenMenu(null);
+                    onOpenConnectionModal();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-200 cursor-pointer transition-colors group"
+                >
+                  <div className="p-1.5 rounded-md bg-amber-500/10 text-amber-400 shrink-0">
+                    <Database className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-zinc-200 group-hover:text-zinc-100">
+                      {isConnected ? t('navbar.changeConnection') : t('navbar.connect')}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 truncate">
+                      {t('navbar.connectDesc')}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Crear Base de Datos */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenMenu(null);
+                    onOpenCreateDbModal();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-200 cursor-pointer transition-colors group"
+                  title={t('navbar.createDbTooltip')}
+                >
+                  <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400 shrink-0">
+                    <PlusCircle className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-zinc-200 group-hover:text-zinc-100">
+                      {t('navbar.createDb')}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 truncate">
+                      {t('navbar.createDbDesc')}
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Desconectar (solo si está conectado) */}
+              {isConnected && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(null);
+                      onDisconnect();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-red-950/40 text-red-400 hover:text-red-300 cursor-pointer transition-colors group"
+                    title={t('navbar.disconnectTooltip')}
+                  >
+                    <div className="p-1.5 rounded-md bg-red-500/10 text-red-400 shrink-0 group-hover:bg-red-500/20">
+                      <Unplug className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-red-400 group-hover:text-red-300">
+                        {t('navbar.disconnect')}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 truncate">
+                        {activeConfig?.name || activeConfig?.database}
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="h-5 w-px bg-zinc-800 mx-0.5" />
+
+        {/* Language Selector Dropdown (Compact) */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => toggleMenu('language')}
+            className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+              openMenu === 'language'
+                ? 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300'
+            }`}
+            title={t('navbar.language')}
+          >
+            <Globe className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="text-[11px] uppercase font-bold">{currentLang.flag} {currentLang.code}</span>
+            <ChevronDown className={`w-3 h-3 text-zinc-500 transition-transform duration-150 ${openMenu === 'language' ? 'rotate-180' : ''}`} />
+          </button>
+
+          {openMenu === 'language' && (
+            <div className="absolute right-0 mt-1.5 z-50 w-36 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1 divide-y divide-zinc-800/60 animate-in fade-in zoom-in-95 duration-100">
+              <div className="py-0.5">
                 {availableLanguages.map((lang) => (
                   <button
                     key={lang.code}
                     type="button"
                     onClick={() => {
                       setLanguage(lang.code);
-                      setIsLangMenuOpen(false);
+                      setOpenMenu(null);
                     }}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                    className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left cursor-pointer transition-colors ${
                       lang.code === language 
                         ? 'bg-amber-500/15 text-amber-300 font-semibold' 
                         : 'text-zinc-300 hover:bg-zinc-800'
                     }`}
                   >
-                    <span>{lang.flag}</span>
-                    <span>{lang.name}</span>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                    {lang.code === language && <Check className="w-3 h-3 text-amber-400" />}
                   </button>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
 
-        {/* Theme Switcher */}
+        {/* Theme Switcher (Compact icon button with tooltip) */}
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+          className="p-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-lg text-xs font-medium transition-colors cursor-pointer"
           title={theme === 'light' ? (t('theme.switchToDark') || 'Cambiar a tema oscuro') : (t('theme.switchToLight') || 'Cambiar a tema claro')}
         >
           {theme === 'light' ? (
-            <>
-              <Sun className="w-3.5 h-3.5 text-amber-500" />
-              <span className="text-[11px] font-semibold">{t('theme.light') || 'Claro'}</span>
-            </>
+            <Sun className="w-4 h-4 text-amber-500" />
           ) : (
-            <>
-              <Moon className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-[11px] font-semibold">{t('theme.dark') || 'Oscuro'}</span>
-            </>
+            <Moon className="w-4 h-4 text-blue-400" />
           )}
         </button>
-
-        <button
-          onClick={onOpenCreateDbModal}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-medium transition-colors shadow-xs"
-          title={t('navbar.createDbTooltip')}
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span>{t('navbar.createDb')}</span>
-        </button>
-
-        <button
-          onClick={onOpenConnectionModal}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-medium transition-colors shadow-xs"
-        >
-          <Database className="w-3.5 h-3.5" />
-          <span>{isConnected ? t('navbar.changeConnection') : t('navbar.connect')}</span>
-        </button>
-
-        {isConnected && (
-          <button
-            onClick={onDisconnect}
-            title={t('navbar.disconnectTooltip')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 hover:bg-red-950/40 text-zinc-400 hover:text-red-300 border border-zinc-800 hover:border-red-500/30 rounded-lg text-xs transition-colors"
-          >
-            <Unplug className="w-3.5 h-3.5 text-red-400" />
-            <span>{t('navbar.disconnect')}</span>
-          </button>
-        )}
       </div>
 
     </header>
