@@ -66,5 +66,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on('fb:migration-progress', handler);
     return () => ipcRenderer.removeListener('fb:migration-progress', handler);
-  }
+  },
+
+  // Server & Session Monitoring (MON$)
+  getMonitoringData: () => ipcRenderer.invoke('fb:get-monitoring-data'),
+  killStatement: (statementId: number) => ipcRenderer.invoke('fb:kill-statement', statementId),
+  killAttachment: (attachmentId: number) => ipcRenderer.invoke('fb:kill-attachment', attachmentId)
 });

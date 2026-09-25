@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
 import { useTranslation } from '../../i18n/I18nContext';
 import { useTheme } from '../../theme/ThemeContext';
+import { registerMonacoThemes } from '../../theme/monacoThemes';
 import { 
   ConnectionConfig, 
   CompareDiffItem, 
@@ -57,7 +58,7 @@ export const CompareDatabaseModal: React.FC<CompareDatabaseModalProps> = ({
   onOpenInSqlEditor
 }) => {
   const { t } = useTranslation();
-  const { theme } = useTheme();
+  const { theme, monacoTheme } = useTheme();
 
   // Connection selection
   const [sourceId, setSourceId] = useState<string>('');
@@ -1011,7 +1012,8 @@ export const CompareDatabaseModal: React.FC<CompareDatabaseModalProps> = ({
                 language="sql"
                 value={generatedScript}
                 onChange={(val) => setGeneratedScript(val || '')}
-                theme={theme === 'light' ? 'vs' : 'vs-dark'}
+                theme={monacoTheme}
+                beforeMount={(monaco) => registerMonacoThemes(monaco)}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,

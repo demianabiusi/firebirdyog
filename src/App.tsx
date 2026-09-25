@@ -13,6 +13,7 @@ import { DumpDatabaseModal } from './components/Modals/DumpDatabaseModal';
 import { ImportDatabaseModal } from './components/Modals/ImportDatabaseModal';
 import { CompareDatabaseModal } from './components/Modals/CompareDatabaseModal';
 import { ObjectDependenciesModal } from './components/Modals/ObjectDependenciesModal';
+import { ServerMonitorModal } from './components/Modals/ServerMonitorModal';
 import { Database, Plus, Sparkles } from 'lucide-react';
 import { useConnectionWorkspace } from './hooks/useConnectionWorkspace';
 
@@ -37,6 +38,7 @@ export const App: React.FC = () => {
   const [isDumpModalOpen, setIsDumpModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [isServerMonitorOpen, setIsServerMonitorOpen] = useState(false);
 
   // Workspace persistence
   const { hydrateWorkspace, saveWorkspaceNow, saveWorkspaceDebounced } = useConnectionWorkspace();
@@ -653,6 +655,7 @@ END;
         onOpenDumpModal={() => setIsDumpModalOpen(true)}
         onOpenImportModal={() => setIsImportModalOpen(true)}
         onOpenCompareModal={() => setIsCompareModalOpen(true)}
+        onOpenServerMonitor={() => setIsServerMonitorOpen(true)}
         onDisconnect={handleDisconnect}
         onNewQuery={handleAddTab}
       />
@@ -868,6 +871,14 @@ END;
         isOpen={isCompareModalOpen}
         onClose={() => setIsCompareModalOpen(false)}
         savedConnections={savedConnections}
+        activeConfig={activeConfig}
+        onOpenInSqlEditor={handleOpenInSqlEditor}
+      />
+
+      {/* Server & Session Monitor Modal */}
+      <ServerMonitorModal
+        isOpen={isServerMonitorOpen}
+        onClose={() => setIsServerMonitorOpen(false)}
         activeConfig={activeConfig}
         onOpenInSqlEditor={handleOpenInSqlEditor}
       />

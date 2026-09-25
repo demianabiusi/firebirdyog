@@ -374,6 +374,34 @@ ipcMain.handle('fb:update-table-rows', async (_, tableName: string, updates: any
   }
 });
 
+// IPC: Server & Session Monitoring (MON$)
+ipcMain.handle('fb:get-monitoring-data', async () => {
+  try {
+    const data = await firebirdService.getMonitoringData();
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al obtener datos de monitoreo' };
+  }
+});
+
+ipcMain.handle('fb:kill-statement', async (_, statementId: number) => {
+  try {
+    const data = await firebirdService.killStatement(statementId);
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al cancelar la consulta' };
+  }
+});
+
+ipcMain.handle('fb:kill-attachment', async (_, attachmentId: number) => {
+  try {
+    const data = await firebirdService.killAttachment(attachmentId);
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Error al desconectar la sesión' };
+  }
+});
+
 // IPC: Dialogs
 ipcMain.handle('dialog:select-database-file', async () => {
   if (!mainWindow) return null;

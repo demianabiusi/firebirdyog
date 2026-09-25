@@ -188,6 +188,87 @@ export interface ElectronAPI {
   executeMigration: (targetConfig: ConnectionConfig, script: string) => Promise<IpcResponse<MigrationExecutionResult>>;
   onCompareProgress: (callback: (progress: CompareProgress) => void) => () => void;
   onMigrationProgress: (callback: (progress: { executed: number; total: number }) => void) => () => void;
+
+  // Server & Session Monitoring (MON$)
+  getMonitoringData: () => Promise<IpcResponse<MonitoringData>>;
+  killStatement: (statementId: number) => Promise<IpcResponse<boolean>>;
+  killAttachment: (attachmentId: number) => Promise<IpcResponse<boolean>>;
+}
+
+export interface MonitoringDatabaseInfo {
+  databaseName: string;
+  pageSize: number;
+  odsMajor: number;
+  odsMinor: number;
+  oit: number;
+  oat: number;
+  ost: number;
+  nextTx: number;
+  txActiveGap: number;
+  txSweepGap: number;
+  sweepInterval: number;
+  totalPages: number;
+  pageBuffers: number;
+  sizeMb: number;
+  sqlDialect: number;
+  currentAttachmentId: number;
+}
+
+export interface MonitoringAttachment {
+  attachmentId: number;
+  serverPid: number;
+  state: number; // 0 = idle, 1 = active
+  attachmentName: string;
+  userName: string;
+  roleName: string;
+  remoteProtocol: string;
+  remoteAddress: string;
+  remotePid: number;
+  remoteProcess: string;
+  connectedAt: string;
+  statementCount: number;
+  transactionCount: number;
+  isCurrent: boolean;
+}
+
+export interface MonitoringStatement {
+  statementId: number;
+  attachmentId: number;
+  userName: string;
+  remoteAddress: string;
+  remoteProcess: string;
+  state: number; // 0 = idle, 1 = active
+  startedAt: string;
+  sqlText: string;
+  transactionId: number;
+  pageReads: number;
+  pageWrites: number;
+  pageFetches: number;
+  pageMarks: number;
+  elapsedMs: number;
+}
+
+export interface MonitoringTransaction {
+  transactionId: number;
+  attachmentId: number;
+  userName: string;
+  remoteAddress: string;
+  remoteProcess: string;
+  state: number;
+  startedAt: string;
+  topTx: number;
+  oldestTx: number;
+  isolationMode: number;
+  readOnly: boolean;
+  elapsedMs: number;
+}
+
+export interface MonitoringData {
+  database: MonitoringDatabaseInfo;
+  attachments: MonitoringAttachment[];
+  statements: MonitoringStatement[];
+  transactions: MonitoringTransaction[];
+  timestamp: string;
 }
 
 export type CompareItemCategory = 

@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { useTranslation } from '../../i18n/I18nContext';
 import { useTheme } from '../../theme/ThemeContext';
+import { registerMonacoThemes } from '../../theme/monacoThemes';
 import { 
   Play, 
   PlaySquare, 
@@ -46,7 +47,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
   schema
 }) => {
   const { t } = useTranslation();
-  const { theme } = useTheme();
+  const { theme, monacoTheme } = useTheme();
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const executeKey = swapF9F5 ? 'F5' : 'F9';
@@ -597,7 +598,8 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
         <Editor
           height="100%"
           defaultLanguage="sql"
-          theme={theme === 'light' ? 'vs' : 'vs-dark'}
+          theme={monacoTheme}
+          beforeMount={(monaco) => registerMonacoThemes(monaco)}
           value={sql}
           onChange={(val) => onChange(val || '')}
           onMount={handleEditorDidMount}

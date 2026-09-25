@@ -44,6 +44,9 @@
     "compareDb": "Compare Databases",
     "compareDbDesc": "Schema and data differences",
     "compareDbTooltip": "Compare metadata and data between databases",
+    "serverMonitor": "Session Monitor (MON$)",
+    "serverMonitorDesc": "Active connections, queries & transaction gap",
+    "serverMonitorTooltip": "Monitor live sessions, running queries and transaction health",
     "createDb": "Create Database",
     "createDbDesc": "New local or remote .fdb file",
     "createDbTooltip": "Create a new Firebird database file (.fdb)",
@@ -327,8 +330,13 @@
   },
   "theme": {
     "theme": "Theme",
-    "light": "Light",
+    "selectTheme": "Select Theme",
     "dark": "Dark",
+    "light": "Light",
+    "dracula": "Dracula",
+    "tokyoNight": "Tokyo Night",
+    "solarized": "Solarized",
+    "nord": "Nord",
     "switchToLight": "Switch to light theme",
     "switchToDark": "Switch to dark theme"
   }

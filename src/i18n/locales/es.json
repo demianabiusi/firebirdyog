@@ -44,6 +44,9 @@
     "compareDb": "Comparar Bases de Datos",
     "compareDbDesc": "Diferencias de estructura y datos",
     "compareDbTooltip": "Comparar metadatos y datos entre bases de datos",
+    "serverMonitor": "Monitor de Sesiones (MON$)",
+    "serverMonitorDesc": "Conexiones, queries activas y brecha de transacciones",
+    "serverMonitorTooltip": "Supervisar sesiones, consultas en vuelo y salud de transacciones",
     "createDb": "Crear Base de Datos",
     "createDbDesc": "Nuevo archivo .fdb local o remoto",
     "createDbTooltip": "Crear un nuevo archivo de base de datos Firebird (.fdb)",
@@ -327,8 +330,13 @@
   },
   "theme": {
     "theme": "Tema",
-    "light": "Claro",
+    "selectTheme": "Seleccionar Tema",
     "dark": "Oscuro",
+    "light": "Claro",
+    "dracula": "Dracula",
+    "tokyoNight": "Tokyo Night",
+    "solarized": "Solarized",
+    "nord": "Nord",
     "switchToLight": "Cambiar a tema claro",
     "switchToDark": "Cambiar a tema oscuro"
   }

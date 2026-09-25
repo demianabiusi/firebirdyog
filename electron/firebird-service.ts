@@ -1587,4 +1587,273 @@ export class FirebirdService {
       ddl
     };
   }
+
+  /**
+   * Internal query helper to run SQL queries returning an array of objects.
+   */
+  public async queryInternal(sql: string, params: any[] = []): Promise<any[]> {
+    if (!this.activeDb) {
+      throw new Error('No hay conexión activa a la base de datos Firebird.');
+    }
+    return new Promise((resolve, reject) => {
+      this.activeDb!.query(sql, params, (err, rows) => {
+        if (err) return reject(err);
+        resolve(Array.isArray(rows) ? rows : []);
+      });
+    });
+  }
+
+  /**
+   * Fetches real-time server and session monitoring metrics from MON$ tables.
+   */
+  public async getMonitoringData(): Promise<any> {
+    if (!this.activeDb) {
+      throw new Error('No hay conexión activa a la base de datos Firebird.');
+    }
+
+    // 1. Current connection ID
+    let currentConnId = 0;
+    try {
+      const connRows: any[] = await this.queryInternal('SELECT CURRENT_CONNECTION AS CURRENT_CONN FROM RDB$DATABASE');
+      if (connRows.length > 0) {
+        currentConnId = this.extractNumber(connRows[0], 'CURRENT_CONN');
+      }
+    } catch (e) {
+      console.warn('Could not get CURRENT_CONNECTION:', e);
+    }
+
+    // 2. Database info & transaction stats from MON$DATABASE
+    const dbSql = `
+      SELECT
+        d.MON$DATABASE_NAME AS DATABASE_NAME,
+        d.MON$PAGE_SIZE AS PAGE_SIZE,
+        d.MON$ODS_MAJOR AS ODS_MAJOR,
+        d.MON$ODS_MINOR AS ODS_MINOR,
+        d.MON$OLDEST_TRANSACTION AS OIT,
+        d.MON$OLDEST_ACTIVE AS OAT,
+        d.MON$OLDEST_SNAPSHOT AS OST,
+        d.MON$NEXT_TRANSACTION AS NEXT_TX,
+        d.MON$SWEEP_INTERVAL AS SWEEP_INTERVAL,
+        d.MON$PAGES AS TOTAL_PAGES,
+        d.MON$PAGE_BUFFERS AS PAGE_BUFFERS,
+        d.MON$SQL_DIALECT AS SQL_DIALECT,
+        d.MON$SHUTDOWN_MODE AS SHUTDOWN_MODE
+      FROM MON$DATABASE d
+    `;
+    const dbRows: any[] = await this.queryInternal(dbSql);
+    const dbRow = dbRows[0] || {};
+    const pageSize = this.extractNumber(dbRow, 'PAGE_SIZE') || 4096;
+    const totalPages = this.extractNumber(dbRow, 'TOTAL_PAGES');
+    const sizeMb = Number(((totalPages * pageSize) / (1024 * 1024)).toFixed(2));
+    const nextTx = this.extractNumber(dbRow, 'NEXT_TX');
+    const oat = this.extractNumber(dbRow, 'OAT');
+    const oit = this.extractNumber(dbRow, 'OIT');
+    const ost = this.extractNumber(dbRow, 'OST');
+    const sweepInterval = this.extractNumber(dbRow, 'SWEEP_INTERVAL');
+
+    const dbInfo = {
+      databaseName: this.extractString(dbRow, 'DATABASE_NAME'),
+      pageSize,
+      odsMajor: this.extractNumber(dbRow, 'ODS_MAJOR'),
+      odsMinor: this.extractNumber(dbRow, 'ODS_MINOR'),
+      oit,
+      oat,
+      ost,
+      nextTx,
+      txActiveGap: Math.max(0, nextTx - oat),
+      txSweepGap: Math.max(0, nextTx - oit),
+      sweepInterval,
+      totalPages,
+      pageBuffers: this.extractNumber(dbRow, 'PAGE_BUFFERS'),
+      sizeMb,
+      sqlDialect: this.extractNumber(dbRow, 'SQL_DIALECT'),
+      currentAttachmentId: currentConnId,
+    };
+
+    // 3. Attachments (Sessions) from MON$ATTACHMENTS
+    const attSql = `
+      SELECT
+        a.MON$ATTACHMENT_ID AS ATTACHMENT_ID,
+        a.MON$SERVER_PID AS SERVER_PID,
+        a.MON$STATE AS STATE,
+        a.MON$ATTACHMENT_NAME AS ATTACHMENT_NAME,
+        a.MON$USER AS USER_NAME,
+        a.MON$ROLE_NAME AS ROLE_NAME,
+        a.MON$REMOTE_PROTOCOL AS REMOTE_PROTOCOL,
+        a.MON$REMOTE_ADDRESS AS REMOTE_ADDRESS,
+        a.MON$REMOTE_PID AS REMOTE_PID,
+        a.MON$REMOTE_PROCESS AS REMOTE_PROCESS,
+        a.MON$TIMESTAMP AS CONNECTED_AT
+      FROM MON$ATTACHMENTS a
+      ORDER BY a.MON$STATE DESC, a.MON$TIMESTAMP DESC
+    `;
+    const attRows: any[] = await this.queryInternal(attSql);
+
+    // 4. Statements (Queries) from MON$STATEMENTS
+    const stmtsSql = `
+      SELECT
+        s.MON$STATEMENT_ID AS STATEMENT_ID,
+        s.MON$ATTACHMENT_ID AS ATTACHMENT_ID,
+        a.MON$USER AS USER_NAME,
+        a.MON$REMOTE_ADDRESS AS REMOTE_ADDRESS,
+        a.MON$REMOTE_PROCESS AS REMOTE_PROCESS,
+        s.MON$STATE AS STATE,
+        s.MON$TIMESTAMP AS STARTED_AT,
+        s.MON$SQL_TEXT AS SQL_TEXT,
+        s.MON$TRANSACTION_ID AS TRANSACTION_ID,
+        COALESCE(i.MON$PAGE_READS, 0) AS PAGE_READS,
+        COALESCE(i.MON$PAGE_WRITES, 0) AS PAGE_WRITES,
+        COALESCE(i.MON$PAGE_FETCHES, 0) AS PAGE_FETCHES,
+        COALESCE(i.MON$PAGE_MARKS, 0) AS PAGE_MARKS
+      FROM MON$STATEMENTS s
+      LEFT JOIN MON$ATTACHMENTS a ON a.MON$ATTACHMENT_ID = s.MON$ATTACHMENT_ID
+      LEFT JOIN MON$IO_STATS i ON i.MON$STAT_ID = s.MON$STAT_ID
+      ORDER BY s.MON$STATE DESC, s.MON$TIMESTAMP DESC
+    `;
+    const stmtsRows: any[] = await this.queryInternal(stmtsSql);
+
+    // Process statements: read blob if SQL_TEXT is blob/function
+    const statements = await Promise.all(
+      stmtsRows.map(async (row) => {
+        let sqlText = '';
+        if (typeof row.SQL_TEXT === 'function' || Buffer.isBuffer(row.SQL_TEXT)) {
+          sqlText = await this.readBlobValue(row.SQL_TEXT);
+        } else if (typeof row.SQL_TEXT === 'string') {
+          sqlText = row.SQL_TEXT;
+        } else {
+          sqlText = this.extractString(row, 'SQL_TEXT');
+        }
+
+        const startedAt = row.STARTED_AT ? new Date(row.STARTED_AT).toISOString() : '';
+        const elapsedMs = row.STARTED_AT ? Math.max(0, Date.now() - new Date(row.STARTED_AT).getTime()) : 0;
+
+        return {
+          statementId: this.extractNumber(row, 'STATEMENT_ID'),
+          attachmentId: this.extractNumber(row, 'ATTACHMENT_ID'),
+          userName: this.extractString(row, 'USER_NAME'),
+          remoteAddress: this.extractString(row, 'REMOTE_ADDRESS'),
+          remoteProcess: this.extractString(row, 'REMOTE_PROCESS'),
+          state: this.extractNumber(row, 'STATE'),
+          startedAt,
+          sqlText: sqlText.trim(),
+          transactionId: this.extractNumber(row, 'TRANSACTION_ID'),
+          pageReads: this.extractNumber(row, 'PAGE_READS'),
+          pageWrites: this.extractNumber(row, 'PAGE_WRITES'),
+          pageFetches: this.extractNumber(row, 'PAGE_FETCHES'),
+          pageMarks: this.extractNumber(row, 'PAGE_MARKS'),
+          elapsedMs,
+        };
+      })
+    );
+
+    // Map statement counts per attachment
+    const stmtCountByAttachment = new Map<number, number>();
+    for (const stmt of statements) {
+      if (stmt.state === 1) {
+        stmtCountByAttachment.set(stmt.attachmentId, (stmtCountByAttachment.get(stmt.attachmentId) || 0) + 1);
+      }
+    }
+
+    // 5. Transactions from MON$TRANSACTIONS
+    const txSql = `
+      SELECT
+        t.MON$TRANSACTION_ID AS TRANSACTION_ID,
+        t.MON$ATTACHMENT_ID AS ATTACHMENT_ID,
+        a.MON$USER AS USER_NAME,
+        a.MON$REMOTE_ADDRESS AS REMOTE_ADDRESS,
+        a.MON$REMOTE_PROCESS AS REMOTE_PROCESS,
+        t.MON$STATE AS STATE,
+        t.MON$TIMESTAMP AS STARTED_AT,
+        t.MON$TOP_TRANSACTION AS TOP_TX,
+        t.MON$OLDEST_TRANSACTION AS OLDEST_TX,
+        t.MON$ISOLATION_MODE AS ISOLATION_MODE,
+        t.MON$READ_ONLY AS READ_ONLY
+      FROM MON$TRANSACTIONS t
+      LEFT JOIN MON$ATTACHMENTS a ON a.MON$ATTACHMENT_ID = t.MON$ATTACHMENT_ID
+      ORDER BY t.MON$TRANSACTION_ID ASC
+    `;
+    const txRows: any[] = await this.queryInternal(txSql);
+
+    const txCountByAttachment = new Map<number, number>();
+    const transactions = txRows.map((row) => {
+      const attId = this.extractNumber(row, 'ATTACHMENT_ID');
+      txCountByAttachment.set(attId, (txCountByAttachment.get(attId) || 0) + 1);
+      const startedAt = row.STARTED_AT ? new Date(row.STARTED_AT).toISOString() : '';
+      const elapsedMs = row.STARTED_AT ? Math.max(0, Date.now() - new Date(row.STARTED_AT).getTime()) : 0;
+
+      return {
+        transactionId: this.extractNumber(row, 'TRANSACTION_ID'),
+        attachmentId: attId,
+        userName: this.extractString(row, 'USER_NAME'),
+        remoteAddress: this.extractString(row, 'REMOTE_ADDRESS'),
+        remoteProcess: this.extractString(row, 'REMOTE_PROCESS'),
+        state: this.extractNumber(row, 'STATE'),
+        startedAt,
+        topTx: this.extractNumber(row, 'TOP_TX'),
+        oldestTx: this.extractNumber(row, 'OLDEST_TX'),
+        isolationMode: this.extractNumber(row, 'ISOLATION_MODE'),
+        readOnly: this.extractNumber(row, 'READ_ONLY') === 1,
+        elapsedMs,
+      };
+    });
+
+    const attachments = attRows.map((row) => {
+      const attId = this.extractNumber(row, 'ATTACHMENT_ID');
+      const connectedAt = row.CONNECTED_AT ? new Date(row.CONNECTED_AT).toISOString() : '';
+      return {
+        attachmentId: attId,
+        serverPid: this.extractNumber(row, 'SERVER_PID'),
+        state: this.extractNumber(row, 'STATE'),
+        attachmentName: this.extractString(row, 'ATTACHMENT_NAME'),
+        userName: this.extractString(row, 'USER_NAME'),
+        roleName: this.extractString(row, 'ROLE_NAME'),
+        remoteProtocol: this.extractString(row, 'REMOTE_PROTOCOL'),
+        remoteAddress: this.extractString(row, 'REMOTE_ADDRESS'),
+        remotePid: this.extractNumber(row, 'REMOTE_PID'),
+        remoteProcess: this.extractString(row, 'REMOTE_PROCESS'),
+        connectedAt,
+        statementCount: stmtCountByAttachment.get(attId) || 0,
+        transactionCount: txCountByAttachment.get(attId) || 0,
+        isCurrent: attId === currentConnId,
+      };
+    });
+
+    return {
+      database: dbInfo,
+      attachments,
+      statements,
+      transactions,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Kills/cancels an actively executing statement via DELETE FROM MON$STATEMENTS.
+   */
+  public async killStatement(statementId: number): Promise<boolean> {
+    if (!this.activeDb) {
+      throw new Error('No hay conexión activa a la base de datos.');
+    }
+    const cleanId = Number(statementId);
+    if (!cleanId || cleanId <= 0) {
+      throw new Error('ID de consulta inválido.');
+    }
+    await this.queryInternal(`DELETE FROM MON$STATEMENTS WHERE MON$STATEMENT_ID = ${cleanId}`);
+    return true;
+  }
+
+  /**
+   * Disconnects/terminates an active attachment session via DELETE FROM MON$ATTACHMENTS.
+   */
+  public async killAttachment(attachmentId: number): Promise<boolean> {
+    if (!this.activeDb) {
+      throw new Error('No hay conexión activa a la base de datos.');
+    }
+    const cleanId = Number(attachmentId);
+    if (!cleanId || cleanId <= 0) {
+      throw new Error('ID de conexión inválido.');
+    }
+    await this.queryInternal(`DELETE FROM MON$ATTACHMENTS WHERE MON$ATTACHMENT_ID = ${cleanId}`);
+    return true;
+  }
 }
