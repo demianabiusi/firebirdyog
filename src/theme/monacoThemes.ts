@@ -1,4 +1,3 @@
-import { loader } from '@monaco-editor/react';
 import { Theme } from './ThemeContext';
 
 export const draculaMonacoTheme = {
@@ -138,13 +137,6 @@ export function registerMonacoThemes(monaco: any) {
   } catch (err) {
     console.error('Failed to register Monaco themes:', err);
   }
-}
-
-// Auto-register via Monaco loader as early as possible
-if (typeof window !== 'undefined') {
-  loader.init().then((monaco) => {
-    registerMonacoThemes(monaco);
-  }).catch(() => {});
 }
 
 export function getMonacoThemeName(theme: Theme): string {
