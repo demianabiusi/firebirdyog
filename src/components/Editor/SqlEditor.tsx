@@ -11,6 +11,7 @@ import {
   Sparkles,
   ArrowLeftRight
 } from 'lucide-react';
+import { formatSql } from '../../utils/sqlFormatter';
 
 interface SqlEditorProps {
   sql: string;
@@ -76,6 +77,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
   }, [acceptOnEnter]);
 
   const completionDisposableRef = useRef<any>(null);
+  const formattingDisposablesRef = useRef<any[]>([]);
 
   useEffect(() => {
     return () => {
@@ -83,6 +85,8 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
         completionDisposableRef.current.dispose();
         completionDisposableRef.current = null;
       }
+      formattingDisposablesRef.current.forEach((d) => d?.dispose?.());
+      formattingDisposablesRef.current = [];
     };
   }, []);
 
@@ -279,6 +283,51 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
       }
     });
 
+    // Register Monaco document and range formatting edit providers
+    formattingDisposablesRef.current.forEach((d) => d?.dispose?.());
+    const docFormatProvider = monaco.languages.registerDocumentFormattingEditProvider('sql', {
+      provideDocumentFormattingEdits: (model: any) => {
+        const text = model.getValue();
+        const formatted = formatSql(text);
+        return [
+          {
+            range: model.getFullModelRange(),
+            text: formatted,
+          },
+        ];
+      },
+    });
+
+    const rangeFormatProvider = monaco.languages.registerDocumentRangeFormattingEditProvider('sql', {
+      provideDocumentRangeFormattingEdits: (model: any, range: any) => {
+        const text = model.getValueInRange(range);
+        const formatted = formatSql(text);
+        return [
+          {
+            range,
+            text: formatted,
+          },
+        ];
+      },
+    });
+
+    formattingDisposablesRef.current = [docFormatProvider, rangeFormatProvider];
+
+    // Monaco Action: Format SQL (bound to Ctrl+Shift+F and Shift+Alt+F)
+    editor.addAction({
+      id: 'format-sql-firebird',
+      label: t('editor.formatSql'),
+      keybindings: [
+        monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF,
+        monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF,
+      ],
+      contextMenuGroupId: '1_modification',
+      contextMenuOrder: 1.5,
+      run: () => {
+        handleFormatRef.current();
+      },
+    });
+
     // Ctrl+Enter: execute all or selected
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       const selection = editor.getSelection();
@@ -289,8 +338,15 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
       }
     });
 
-    // Intercept editor keydown to prevent browser/Electron refresh on F5 or F9
+    // Intercept editor keydown to prevent browser/Electron refresh on F5 or F9 or browser default on Ctrl+Shift+F
     editor.onKeyDown((e: any) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.keyCode === monaco.KeyCode.KeyF) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleFormatRef.current();
+        return;
+      }
+
       if (e.keyCode === monaco.KeyCode.F5 || e.keyCode === monaco.KeyCode.F9) {
         e.preventDefault();
         e.stopPropagation();
@@ -339,12 +395,81 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
   };
 
   const handleFormatSql = () => {
-    const formatted = sql.replace(
-      /\b(select|from|where|and|or|order by|group by|insert into|values|update|set|delete|left join|inner join|right join|join|having|rows|create table|drop table|alter table|begin|end)\b/gi,
-      (match) => match.toUpperCase()
-    );
-    onChange(formatted);
+    const editor = editorRef.current;
+    if (!editor) {
+      const formatted = formatSql(sql);
+      onChange(formatted);
+      return;
+    }
+
+    const model = editor.getModel();
+    if (!model) {
+      const formatted = formatSql(sql);
+      onChange(formatted);
+      return;
+    }
+
+    const selection = editor.getSelection();
+    if (selection && !selection.isEmpty()) {
+      const selectedText = model.getValueInRange(selection);
+      const formatted = formatSql(selectedText);
+      if (formatted !== selectedText) {
+        editor.executeEdits('sql-formatter', [
+          {
+            range: selection,
+            text: formatted,
+            forceMoveMarkers: true,
+          },
+        ]);
+        editor.pushUndoStop();
+        onChange(editor.getValue());
+      }
+    } else {
+      const fullText = model.getValue();
+      const formatted = formatSql(fullText);
+      if (formatted !== fullText) {
+        const fullRange = model.getFullModelRange();
+        editor.executeEdits('sql-formatter', [
+          {
+            range: fullRange,
+            text: formatted,
+            forceMoveMarkers: true,
+          },
+        ]);
+        editor.pushUndoStop();
+        onChange(editor.getValue());
+      }
+    }
   };
+
+  const handleFormatRef = useRef(handleFormatSql);
+  useEffect(() => {
+    handleFormatRef.current = handleFormatSql;
+  }, [handleFormatSql]);
+
+  // Global window shortcut for Ctrl+Shift+F
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f' || e.code === 'KeyF')) {
+        const target = e.target as HTMLElement | null;
+        if (target) {
+          const isMonaco = target.closest('.monaco-editor');
+          const tagName = target.tagName?.toLowerCase();
+          if (!isMonaco && (tagName === 'input' || tagName === 'textarea' || target.isContentEditable)) {
+            return;
+          }
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        handleFormatRef.current();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 overflow-hidden">

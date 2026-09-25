@@ -98,7 +98,7 @@
     "executeSelection": "Execute Selection",
     "executeTooltip": "Execute Query (F9 or Ctrl+Enter)",
     "stop": "Stop",
-    "formatSql": "Format",
+    "formatSql": "Format SQL (Ctrl+Shift+F)",
     "openSql": "Open SQL...",
     "saveSql": "Save SQL...",
     "clear": "Clear",
