@@ -16,8 +16,8 @@ interface OutputPanelProps {
   result: QueryResult | null;
   isRunning: boolean;
   error: string | null;
-  activeTab: 'grid' | 'messages' | 'history';
-  onSelectTab: (tab: 'grid' | 'messages' | 'history') => void;
+  activeTab: 'grid' | 'messages' | 'ddl' | 'history';
+  onSelectTab: (tab: 'grid' | 'messages' | 'ddl' | 'history') => void;
   history: QueryHistoryItem[];
   onSelectHistorySql: (sql: string) => void;
   onClearHistory: () => void;

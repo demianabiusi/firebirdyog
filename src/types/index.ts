@@ -62,6 +62,9 @@ export interface TableDetails {
   ddl?: string;
 }
 
+/** Alias kept for backwards compat with TableDesignerModal */
+export type TableColumnDetails = ColumnInfo;
+
 export interface ObjectDependencyItem {
   objectName: string;
   objectType: string;
@@ -381,6 +384,7 @@ export interface DumpProgress {
 export interface ImportOptions {
   filePath: string;
   stopOnError: boolean;
+  ignoreExistingObjects?: boolean;
 }
 
 export interface ImportErrorItem {
@@ -388,6 +392,7 @@ export interface ImportErrorItem {
   statementSnippet: string;
   error: string;
   lineNumber: number;
+  isWarning?: boolean;
 }
 
 export interface ImportProgress {

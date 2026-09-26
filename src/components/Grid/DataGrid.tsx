@@ -470,7 +470,7 @@ export const DataGrid: React.FC<DataGridProps> = ({ result, isRunning, schemaObj
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5">
                         {isPkCol && (
-                          <Key className="w-3 h-3 text-amber-400 shrink-0" title="Clave Primaria (PK) - Protegida contra edición directa" />
+                          <Key className="w-3 h-3 text-amber-400 shrink-0" aria-label="Clave Primaria (PK) - Protegida contra edición directa" />
                         )}
                         <span className="truncate">{col}</span>
                       </div>

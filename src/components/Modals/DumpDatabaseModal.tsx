@@ -157,7 +157,7 @@ export const DumpDatabaseModal: React.FC<DumpDatabaseModalProps> = ({
         if (!res.success) {
           throw new Error(res.error || 'Error durante la exportación de la base de datos.');
         }
-        setSuccessResult(res.data);
+        setSuccessResult(res.data ?? null);
       }
     } catch (err: any) {
       setError(err.message || String(err));

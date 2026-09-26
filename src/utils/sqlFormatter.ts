@@ -1,4 +1,4 @@
-import { formatDialect, postgresql } from 'sql-formatter';
+import { formatDialect, postgresql, type DialectOptions } from 'sql-formatter';
 
 /**
  * Customized Firebird SQL dialect for sql-formatter.
@@ -6,12 +6,12 @@ import { formatDialect, postgresql } from 'sql-formatter';
  * Firebird clauses (FIRST, SKIP, ROWS, STARTING WITH, CONTAINING, etc.),
  * and stored procedure blocks (EXECUTE BLOCK, SUSPEND, etc.).
  */
-export const firebirdDialect = {
+export const firebirdDialect: DialectOptions = {
   ...postgresql,
   tokenizerOptions: {
     ...postgresql.tokenizerOptions,
     identChars: { first: '$', rest: '$' },
-    paramTypes: { positional: true, named: [':', '?'] },
+    paramTypes: { positional: true, named: [':'] },
     reservedKeywords: [
       ...postgresql.tokenizerOptions.reservedKeywords,
       'FIRST',
@@ -40,7 +40,7 @@ export const firebirdDialect = {
       'RDB$DATABASE',
     ],
     reservedKeywordPhrases: [
-      ...postgresql.tokenizerOptions.reservedKeywordPhrases,
+      ...(postgresql.tokenizerOptions.reservedKeywordPhrases ?? []),
       'STARTING WITH',
       'NEXT VALUE FOR',
       'EXECUTE BLOCK',
@@ -50,7 +50,7 @@ export const firebirdDialect = {
       'FOREIGN KEY',
     ],
     reservedFunctionNames: [
-      ...postgresql.tokenizerOptions.reservedFunctionNames,
+      ...(postgresql.tokenizerOptions.reservedFunctionNames ?? []),
       'GEN_ID',
       'IIF',
       'LIST',
