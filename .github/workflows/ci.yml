@@ -24,11 +24,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential python3
+
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Run install scripts for native modules
+        run: |
+          npx node-gyp rebuild --directory node_modules/cpu-features || true
+          node node_modules/ssh2/install.js || true
 
       - name: TypeScript check (renderer)
         run: npx tsc --noEmit
@@ -56,12 +66,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (no native build needed for audit)
+        run: npm ci --ignore-scripts
 
       - name: Audit dependencies
-        # Audit but don't fail CI on moderate vulnerabilities from transitive deps
-        run: npm audit --audit-level=high || true
+        # Only fail on high/critical vulnerabilities; moderate ones often come from
+        # transitive Electron/builder deps outside our control
+        run: npm audit --audit-level=high

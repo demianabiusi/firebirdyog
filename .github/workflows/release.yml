@@ -31,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
@@ -64,15 +64,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            libgtk-3-0 libnotify-dev libgconf-2-4 libnss3 \
-            libxss1 libasound2 libxtst6 xauth xvfb
+            build-essential python3 \
+            libgtk-3-0 libnotify-dev libnss3 \
+            libxss1 libasound2t64 libxtst6 xauth xvfb
 
       - name: Install dependencies
         run: npm ci
