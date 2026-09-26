@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  # ─────────────────────────────────────────────
+  # TypeScript type-check + Vite build
+  # ─────────────────────────────────────────────
+  build-check:
+    name: Type-check & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check (renderer)
+        run: npx tsc --noEmit
+
+      - name: TypeScript check (electron)
+        run: npx tsc -p tsconfig.electron.json --noEmit
+
+      - name: Build frontend (Vite)
+        run: npm run build:ui
+
+      - name: Build electron main process
+        run: npm run build:electron
+
+  # ─────────────────────────────────────────────
+  # Dependency audit
+  # ─────────────────────────────────────────────
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        # Audit but don't fail CI on moderate vulnerabilities from transitive deps
+        run: npm audit --audit-level=high || true

@@ -1,20 +1,31 @@
-name: Build & Release Portable Executable
+name: Build & Release
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Mark as pre-release?'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
 
 permissions:
   contents: write
 
 jobs:
+  # ─────────────────────────────────────────────
+  # Windows portable .exe
+  # ─────────────────────────────────────────────
   build-windows:
+    name: Build Windows (portable .exe)
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -24,19 +35,112 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Build application
+      - name: Build
         run: npm run build
 
       - name: Package Windows Portable
         run: npx electron-builder --win portable --publish never
 
-      - name: Create Release and Upload Asset
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: release/*.exe
+          name: windows-portable
+          path: release/*.exe
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Linux AppImage
+  # ─────────────────────────────────────────────
+  build-linux:
+    name: Build Linux (AppImage)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-0 libnotify-dev libgconf-2-4 libnss3 \
+            libxss1 libasound2 libxtst6 xauth xvfb
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Package Linux AppImage
+        run: npx electron-builder --linux AppImage --publish never
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: release/*.AppImage
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Create GitHub Release
+  # ─────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-portable
+          path: release/
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-appimage
+          path: release/
+
+      - name: List release files
+        run: ls -lh release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.exe
+            release/*.AppImage
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ github.event.inputs.prerelease == 'true' || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+          body: |
+            ## FirebirdYog ${{ github.ref_name }}
+
+            ### Downloads
+            | Platform | File |
+            |---|---|
+            | **Windows** | `FirebirdYog-Portable-*.exe` — no installation required |
+            | **Linux** | `FirebirdYog-*.AppImage` — run `chmod +x` then execute |
+
+            ### What's Changed
+            See the auto-generated changelog below.
+
+            ---
+            > **Note:** FirebirdYog does not require Firebird client libraries to be installed locally.
+            > It communicates with Firebird servers directly over the network protocol via `node-firebird`.

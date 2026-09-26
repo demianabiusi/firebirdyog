@@ -1,134 +1,220 @@
-# FirebirdYog 🔥
+<div align="center">
+  <img src="public/icon.svg" alt="FirebirdYog Logo" width="80" />
+  <h1>FirebirdYog 🔥</h1>
+  <p><strong>A modern, lightweight and free Firebird SQL client — built with Electron + React + Monaco Editor</strong></p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-amber.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue.svg)]()
-[![Firebird](https://img.shields.io/badge/Firebird%20SQL-2.5%20%7C%203.0%20%7C%204.0%20%7C%205.0-red.svg)](https://firebirdsql.org/)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-amber.svg)](https://opensource.org/licenses/MIT)
+  [![Firebird](https://img.shields.io/badge/Firebird_SQL-2.5_%7C_3.0_%7C_4.0_%7C_5.0-red?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB5PSIuOWVtIiBmb250LXNpemU9IjkwIj7wn5S8PC90ZXh0Pjwvc3ZnPg==)](https://firebirdsql.org/)
+  [![Platform](https://img.shields.io/badge/Platform-Windows_%7C_Linux-0078D4?logo=windows)](https://github.com/demianabiusi/firebirdyog/releases)
+  [![Build & Release](https://github.com/demianabiusi/firebirdyog/actions/workflows/release.yml/badge.svg)](https://github.com/demianabiusi/firebirdyog/actions/workflows/release.yml)
+  [![CI](https://github.com/demianabiusi/firebirdyog/actions/workflows/ci.yml/badge.svg)](https://github.com/demianabiusi/firebirdyog/actions/workflows/ci.yml)
+  [![GitHub release](https://img.shields.io/github/v/release/demianabiusi/firebirdyog)](https://github.com/demianabiusi/firebirdyog/releases/latest)
+  [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-**FirebirdYog** es un cliente de base de datos moderno, ligero y elegante para **Firebird SQL**.
+  <br/>
 
-Inspirado en la agilidad y practicidad de herramientas clásicas como **SQLyog**, y nacido para ofrecer una alternativa moderna frente a interfaces añejas como **FlameRobin** o entornos excesivamente pesados como **DBeaver**.
+  **[⬇️ Download for Windows](https://github.com/demianabiusi/firebirdyog/releases/latest)** · **[⬇️ Download for Linux](https://github.com/demianabiusi/firebirdyog/releases/latest)** · **[🐛 Report Bug](https://github.com/demianabiusi/firebirdyog/issues)** · **[✨ Request Feature](https://github.com/demianabiusi/firebirdyog/issues)**
 
----
-
-## 🎯 ¿Por qué FirebirdYog?
-
-En el ecosistema de Firebird SQL (ampliamente utilizado en sistemas ERP, facturación, puntos de venta y software de gestión), los desarrolladores y DBAs suelen enfrentarse al mismo dilema:
-- **FlameRobin:** Interfaz obsoleta, sin autocompletado inteligente y con edición incómoda.
-- **DBeaver:** Excelente pero excesivamente pesado (Java/Eclipse), consume cientos de MBs de memoria y tarda en abrir para consultas rápidas del día a día.
-- **IBExpert:** Potente pero propietario, costoso en su versión completa y anclado a interfaces antiguas.
-
-**FirebirdYog** combina lo mejor de ambos mundos: la ligereza de una aplicación portable, la potencia del editor de código de **VS Code (Monaco Editor)** y una experiencia de usuario diseñada para trabajar con velocidad y comodidad.
+</div>
 
 ---
 
-## ✨ Características Principales
-
-### 🧠 Editor SQL con IntelliSense Contextual (Monaco Editor)
-- **Autocompletado inteligente de campos:** Escribe `CLIENTES.` y se desplegará al instante la lista de columnas de esa tabla.
-- **Soporte de Alias:** Reconoce alias en sentencias `FROM` y `JOIN` (por ejemplo `FROM CLIENTES c WHERE c.` desplegará las columnas de `CLIENTES`).
-- **Palabras clave y funciones de Firebird:** Resaltado y sugerencias para `ROWS`, `FIRST`, `SKIP`, `GEN_ID`, `LIST`, `COALESCE`, `IIF`, tablas de sistema `RDB$...`, tipos de datos y más.
-- **Atajos de teclado configurables:** 
-  - Ejecutar consulta con `F9` o `Ctrl + Enter`.
-  - Opción de **intercambiar F9 / F5** (estilo SQLyog) para alternar entre ejecutar consulta y refrescar objetos.
-- **Múltiples pestañas:** Crea, renombra y organiza tantas solapas de consulta como necesites.
-
-### 🗂️ Explorador de Objetos Completo
-- **Árbol jerárquico:**
-  - 📋 **Tablas:** Visualización de columnas, claves primarias, índices, triggers y generador de DDL.
-  - 👁️ **Vistas:** Consulta rápida y definición DDL.
-  - ⚙️ **Stored Procedures Inteligentes:** Detección automática de procedimientos ejecutables (`EXECUTE PROCEDURE`) vs seleccionables (`SELECT * FROM SP(...)`) inspeccionando los parámetros de entrada y salida requeridos.
-  - ⚡ **Triggers:** Inspección de estado (activo/inactivo) y tabla asociada.
-  - 🔢 **Generadores / Secuencias:** Con consulta directa de valores actuales (`GEN_ID`).
-  - 🏷️ **Dominios** y ⚠️ **Excepciones**.
-- **Filtro de búsqueda instantáneo:** Encuentra cualquier tabla, procedimiento o campo escribiendo en el buscador del árbol.
-
-### 📊 Grilla de Resultados de Alto Rendimiento
-- **Renderizado ultra-rápido:** Diseñado para visualizar miles de registros sin congelar la interfaz.
-- **Filtro rápido:** Búsqueda en tiempo real sobre los datos ya cargados.
-- **Copiado con 1 clic:** Haz clic sobre cualquier celda para copiar su valor al portapapeles.
-- **Visor BLOB / Textos Largos:** Doble clic en una celda para abrir el visor dedicado para textos extensos o JSON.
-- **Exportación directa:** Exporta los resultados seleccionados o completos a **CSV**, **JSON** o sentencias **SQL INSERT**.
-
-### 🔄 Comparador y Sincronizador de Bases de Datos (Schema & Data Diff)
-- **Comparación Visual Origen vs Destino:** Selecciona dos bases de datos guardadas para contrastar diferencias estructurales y de datos al estilo SQLyog.
-- **Diff Completo de Metadatos:**
-  - Tablas, Columnas (agregadas, eliminadas o con tipo de dato modificado).
-  - Claves Primarias y Foráneas (Foreign Keys).
-  - Vistas, Procedimientos Almacenados y Triggers.
-  - Generadores / Secuencias y sincronización de valores actuales (`GEN_ID`).
-  - Dominios y Excepciones.
-- **Sincronización de Datos:** Identifica filas faltantes para generar `INSERT`s y registros modificados para generar `UPDATE`s (con clave primaria).
-- **Generación de Script de Migración:** Produce scripts SQL limpios y ordenados por dependencias para Firebird Dialecto 3, listos para copiar, guardar como `.sql`, abrir en el editor o ejecutar directamente en la base de destino.
-
-### 💾 Persistencia Total del Entorno
-- **Memoria por Conexión:** Cada base de datos recuerda sus propias pestañas abiertas, sus consultas escritas, el historial y la configuración de registros a mostrar (`maxRows`).
-- **Estado de la Ventana:** Recuerda tamaño, posición en pantalla y si la ventana estaba maximizada.
-- **Auto-reconexión al iniciar:** Al abrir la aplicación, reconecta automáticamente a la última base de datos usada para que puedas continuar trabajando de inmediato (configurable con opción de desactivar).
-
-### 🌐 Conectividad y Charsets
-- Compatible con **Firebird 2.5, 3.0, 4.0 y 5.0**.
-- Soporte completo de codificaciones: `UTF8`, `ISO8859_1`, `WIN1252`, `LATIN1`, `NONE`, etc.
-- Prueba de conexión con medición de latencia (ping en milisegundos).
+![FirebirdYog Screenshot](public/screenshot.jpg)
 
 ---
 
-## 📥 Descarga (Portátil para Windows)
+## ❓ Why FirebirdYog?
 
-No necesitas instalar Node.js ni compilar nada para usar FirebirdYog:
+Firebird SQL is widely used in ERP systems, POS, billing and management software — especially in Latin America and Eastern Europe. But its tooling ecosystem is stuck in the past:
 
-1. Ve a la sección de **[Releases](https://github.com/demianabiusi/firebirdyog/releases)**.
-2. Descarga el archivo ejecutable portable `FirebirdYog-Portable.exe`.
-3. Haz doble clic y ¡listo! No requiere instalación.
+| Tool | Problem |
+|---|---|
+| **FlameRobin** | Last release 2012. No autocomplete, outdated UI. |
+| **IBExpert** | Commercial, Windows-only, expensive for full features. |
+| **DBeaver** | Generic Java/Eclipse app. Heavy (500MB+), slow to open. |
+| **SQL Workbench/J** | Bare minimum, no Firebird-specific features. |
+
+**FirebirdYog** fills that gap: a free, open source, cross-platform client built on modern technology — giving you a **VS Code-quality editor** and a clean interface designed specifically for Firebird.
 
 ---
 
-## 🛠️ Desarrollo y Compilación
+## ✨ Features
 
-Si deseas clonar el proyecto, ejecutarlo en desarrollo o compilarlo tú mismo:
+### 🧠 Smart SQL Editor (Monaco — same engine as VS Code)
+- **Contextual column autocomplete** — type `TABLE.` or alias `t.` and get instant column suggestions from the live schema
+- **Alias resolution** — recognizes `FROM CUSTOMERS c JOIN ORDERS o ON ...` and provides columns for each alias
+- **Firebird keywords & functions** — `ROWS`, `FIRST`, `SKIP`, `GEN_ID`, `LIST`, `COALESCE`, `IIF`, `RDB$` system tables and more
+- **SQL formatter** — `Ctrl+Shift+F` to format with Firebird-aware dialect
+- **Multiple query tabs** — rename, reorder, persist between sessions
+- **Configurable shortcuts** — F9/F5 swap mode for SQLyog veterans
 
-### Requisitos previos
-- [Node.js](https://nodejs.org/) v18 o superior
-- [npm](https://www.npmjs.com/) v9 o superior
+### 🗂️ Object Explorer
+- **Tables** — columns with types, primary keys, indexes, triggers, DDL generation
+- **Views** — DDL inspection and quick query
+- **Stored Procedures** — smart detection: executable (`EXECUTE PROCEDURE`) vs selectable (`SELECT * FROM SP(...)`)
+- **Triggers** — active/inactive status, associated table
+- **Generators / Sequences** — live value inspection via `GEN_ID`
+- **Domains, Exceptions** — full DDL browsing
+- **Instant search filter** — find any object as you type
 
-### Clonar y preparar dependencias
+### 📊 High-Performance Results Grid
+- Virtualized rendering — thousands of rows without freezing
+- **In-grid editing** — edit cells directly for single-table queries with primary keys
+- Copy cell value with one click
+- **BLOB / long text viewer** — double-click any cell
+- **Export** — CSV, JSON, SQL INSERT
+
+### 🔄 Schema & Data Diff / Sync
+- Visual side-by-side comparison of two databases
+- Detects differences in: tables, columns, data types, primary keys, foreign keys, views, stored procedures, triggers, generators, domains, exceptions
+- Row-level data diff: missing INSERTs and changed UPDATEs
+- **Migration script generator** — ordered by dependency, Firebird Dialect 3 compliant, ready to copy/save/execute
+
+### 📡 Session Monitor (MON$ tables)
+- Real-time view of active connections, running statements and transactions
+- Kill a query or disconnect a session directly from the UI
+- Database health stats: OIT, OAT, transaction gaps, page cache, size on disk
+
+### 💾 Dump & Import
+- Export database to SQL script (structure + data)
+- Import SQL scripts with progress tracking and error reporting
+
+### 🔒 SSH Tunnel
+- Connect to remote Firebird servers through SSH with password or key file
+
+### 🎨 Themes
+- Light, Dark, Dracula, Tokyo Night, Solarized, Nord
+
+### 💡 Quality of Life
+- Auto-reconnect to last database on startup (configurable)
+- Per-connection workspace memory — tabs, queries, history, row limit
+- Window state persistence — size, position, maximized state
+- i18n: Spanish and English
+
+---
+
+## ⬇️ Installation
+
+### Pre-built binaries (recommended)
+
+Go to the **[Releases page](https://github.com/demianabiusi/firebirdyog/releases)** and download:
+
+| Platform | File |
+|---|---|
+| **Windows** | `FirebirdYog-Portable-x64.exe` — no installation required, just run it |
+| **Linux** | `FirebirdYog-x86_64.AppImage` — make executable and run |
+
 ```bash
-git clone https://github.com/demianabiusi/firebirdyog.git
-cd firebirdyog
-npm install
+# Linux: make it executable and run
+chmod +x FirebirdYog-x86_64.AppImage
+./FirebirdYog-x86_64.AppImage
 ```
 
-### Ejecutar en modo desarrollo
+> **Note:** FirebirdYog uses `node-firebird` which communicates with Firebird natively over the network protocol. You do **not** need the Firebird client libraries installed on your machine.
+
+---
+
+## 🛠️ Build from Source
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) v18 or later
+- [npm](https://www.npmjs.com/) v9 or later
+
+### Steps
+
 ```bash
+# 1. Clone the repository
+git clone https://github.com/demianabiusi/firebirdyog.git
+cd firebirdyog
+
+# 2. Install dependencies
+npm install
+
+# 3. Run in development mode (Vite + Electron hot-reload)
 npm run dev
 ```
 
-### Compilar binarios de producción
+### Build production binaries
+
 ```bash
-# Compilar frontend y proceso de Electron
+# Build frontend + Electron main process
 npm run build
 
-# Generar el ejecutable portable para Windows (.exe)
+# Package for Windows (portable .exe)
 npm run package:win
 
-# Generar AppImage para Linux
+# Package for Linux (AppImage)
 npm run package:linux
 ```
-Los ejecutables generados se encontrarán en la carpeta `release/`.
+
+Output will be in the `release/` folder.
 
 ---
 
-## 🤝 Contribuciones
+## 🏗️ Tech Stack
 
-¡Las contribuciones, ideas, reportes de bugs y solicitudes de funcionalidades son bienvenidas!
-
-1. Haz un Fork del proyecto.
-2. Crea tu rama para la funcionalidad (`git checkout -b feature/nueva-funcionalidad`).
-3. Haz commit de tus cambios (`git commit -m 'feat: agrega nueva funcionalidad'`).
-4. Haz push a tu rama (`git push origin feature/nueva-funcionalidad`).
-5. Abre un **Pull Request**.
+| Layer | Technology |
+|---|---|
+| **Framework** | [Electron](https://electronjs.org/) v44 |
+| **UI** | [React](https://react.dev/) v19 + [TypeScript](https://www.typescriptlang.org/) |
+| **Styling** | [Tailwind CSS](https://tailwindcss.com/) v4 |
+| **SQL Editor** | [Monaco Editor](https://microsoft.github.io/monaco-editor/) (VS Code engine) |
+| **Build tool** | [Vite](https://vitejs.dev/) v8 |
+| **Firebird driver** | [node-firebird](https://github.com/hgourvest/node-firebird) |
+| **SSH** | [ssh2](https://github.com/mscdex/ssh2) |
 
 ---
 
-## 📄 Licencia
+## 🤝 Contributing
 
-Este proyecto está distribuido bajo la licencia **MIT**. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+Contributions, issues, and feature requests are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Quick start:
+
+```bash
+# Fork the repo, then:
+git clone https://github.com/YOUR_USERNAME/firebirdyog.git
+cd firebirdyog
+npm install
+npm run dev
+```
+
+1. Fork the project
+2. Create your branch: `git checkout -b feat/my-new-feature`
+3. Commit your changes: `git commit -m 'feat: add some feature'`
+4. Push to your branch: `git push origin feat/my-new-feature`
+5. Open a Pull Request
+
+We use [Conventional Commits](https://www.conventionalcommits.org/) for commit messages.
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] Query execution plan viewer (`PLAN`)
+- [ ] Table data editor with `INSERT` / `DELETE` from grid
+- [ ] Database creation wizard
+- [ ] Result set chart visualizer
+- [ ] macOS support
+- [ ] Plugin/extension system
+
+---
+
+## 📄 License
+
+Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgements
+
+- [FlameRobin](http://flamerobin.org/) — the OG open source Firebird client that inspired this project
+- [node-firebird](https://github.com/hgourvest/node-firebird) — the Firebird driver that makes this possible
+- [Monaco Editor](https://microsoft.github.io/monaco-editor/) — for the best-in-class editor experience
+- The [Firebird SQL](https://firebirdsql.org/) community — for keeping a great database alive
+
+---
+
+<div align="center">
+  Made with ❤️ for the Firebird SQL community · <a href="https://github.com/demianabiusi/firebirdyog/stargazers">⭐ Star this project</a> if it's useful to you!
+</div>

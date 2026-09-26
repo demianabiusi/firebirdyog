@@ -1,5 +1,5 @@
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -16,6 +16,9 @@ dist-electron/
 build/
 out/
 
+# Packager output
+release/
+
 # Environment and local configs
 .env
 .env.local
@@ -24,18 +27,32 @@ out/
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+!.vscode/settings.json
+.idea/
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Firebird Database files & local data
-data/
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Electron app user data (generated at runtime)
+app-data/
+
+# Firebird database files (don't commit real databases)
 *.fdb
 *.gdb
 *.fbk
-*.sql
-release/
+data/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
