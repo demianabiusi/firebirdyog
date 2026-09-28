@@ -52,6 +52,7 @@
       "shortcutName": "FirebirdYog"
     },
     "linux": {
+      "icon": "public/icon.png",
       "target": [
         "AppImage"
       ],

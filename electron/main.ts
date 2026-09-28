@@ -65,21 +65,19 @@ function saveWindowState(win: BrowserWindow) {
 
 function getAppIcon(): NativeImage | string | undefined {
   const isWin = process.platform === 'win32';
+  const iconName = isWin ? 'icon.ico' : 'icon.png';
 
-  const possiblePaths = app.isPackaged
-    ? [
-        // En producción: los íconos están junto al .exe, fuera del .asar
-        path.join(process.resourcesPath, '..', isWin ? 'icon.ico' : 'icon.png'),
-        path.join(path.dirname(app.getPath('exe')), isWin ? 'icon.ico' : 'icon.png'),
-        path.join(process.resourcesPath, isWin ? 'icon.ico' : 'icon.png'),
-      ]
-    : [
-        // En desarrollo: public/
-        path.join(__dirname, '../public', isWin ? 'icon.ico' : 'icon.png'),
-        path.join(process.cwd(), 'public', isWin ? 'icon.ico' : 'icon.png'),
-        path.join(__dirname, '../public/icon.png'),
-        path.join(process.cwd(), 'public/icon.png'),
-      ];
+  // __dirname points to dist-electron/ both in dev and packaged builds
+  // (in packaged builds it lives inside app.asar), so public/ is always a sibling.
+  const possiblePaths = [
+    path.join(__dirname, '..', 'public', iconName),
+    path.join(__dirname, '..', 'public', 'icon.png'),
+    path.join(process.resourcesPath, '..', iconName),
+    path.join(path.dirname(app.getPath('exe')), iconName),
+    path.join(process.resourcesPath, iconName),
+    path.join(process.cwd(), 'public', iconName),
+    path.join(process.cwd(), 'public', 'icon.png'),
+  ];
 
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
