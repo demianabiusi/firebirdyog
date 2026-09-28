@@ -216,5 +216,5 @@ Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
 ---
 
 <div align="center">
-  Made with ❤️ for the Firebird SQL community · <a href="https://github.com/demianabiusi/firebirdyog/stargazers">⭐ Star this project</a> if it's useful to you!
+  Made with ❤️ for the Firebird SQL community · <a href="https://github.com/demianabiusi/firebirdyog/stargazers">⭐ Star this project</a> if it's useful to You!
 </div>
