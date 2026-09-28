@@ -27,7 +27,7 @@ Renderer never talks to Firebird directly. All backend access goes through `wind
 - `npm start` (= `electron .`) runs unpackaged, so `isDev` is true and it loads `http://localhost:5173` — it will fail unless the Vite dev server is running. Use `npm run dev` instead.
 - Adding a new IPC channel requires three edits: handler in `electron/main.ts`, bridge in `electron/preload.ts`, and type in `src/types/index.ts`.
 - `.fdb`/`.gdb`/`.fbk` and `data/` are gitignored — never commit database files.
-- CI (`.github/workflows/ci.yml`) runs `npm ci --ignore-scripts --omit=optional` on Linux; optional Windows-only electron-builder deps are deliberately omitted.
+- CI (`.github/workflows/ci.yml`) runs `npm ci --ignore-scripts` on Linux. Do not add `--omit=optional`: TypeScript 7 (native compiler) needs its platform binary `@typescript/typescript-linux-x64`, which is an optional dependency.
 
 ## Conventions
 
