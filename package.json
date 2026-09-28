@@ -34,6 +34,7 @@
     ],
     "win": {
       "icon": "public/icon.ico",
+      "artifactName": "${productName}-${version}-portable-${arch}.${ext}",
       "target": [
         {
           "target": "portable",
@@ -54,7 +55,8 @@
       "target": [
         "AppImage"
       ],
-      "category": "Development"
+      "category": "Development",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   },
   "keywords": [
