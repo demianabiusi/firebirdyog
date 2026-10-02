@@ -8,6 +8,7 @@ import {
   CheckCircle, 
   AlertCircle, 
   Plus, 
+  Copy,
   Trash2, 
   Save, 
   Zap, 
@@ -194,6 +195,23 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       name: `Conexión ${savedConnections.length + 1}`
     };
     setSelectedConfig(ensureSshConfig(newConn));
+    setTestResult(null);
+    setSshTestResult(null);
+    setActiveTab('general');
+  };
+
+  // Duplicates a profile (host, credentials, SSH, etc.) as a new unsaved entry
+  // so the user can adjust the database path/name and then press "Guardar".
+  const handleClone = (conn: ConnectionConfig, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const { createdAt: _createdAt, ...rest } = conn;
+    const cloned = ensureSshConfig({
+      ...rest,
+      id: 'conn_' + Date.now(),
+      name: `${conn.name} (${t('connectionModal.cloneSuffix')})`
+    });
+    lastSelectedIdRef.current = cloned.id;
+    setSelectedConfig(cloned);
     setTestResult(null);
     setSshTestResult(null);
     setActiveTab('general');
@@ -406,13 +424,22 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                         </div>
                       </div>
 
-                      <button
-                        onClick={(e) => handleDelete(conn.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400 rounded transition-opacity"
-                        title="Eliminar perfil"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => handleClone(conn, e)}
+                          className="p-1 text-zinc-500 hover:text-amber-400 rounded"
+                          title={t('connectionModal.cloneConnection')}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(conn.id, e)}
+                          className="p-1 text-zinc-500 hover:text-red-400 rounded"
+                          title="Eliminar perfil"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

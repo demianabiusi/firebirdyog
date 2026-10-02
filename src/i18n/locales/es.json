@@ -159,7 +159,9 @@
     "saveAndConnect": "Guardar y Conectar",
     "deleteConnectionConfirm": "¿Seguro que deseas eliminar esta conexión?",
     "testSuccess": "¡Conexión exitosa a Firebird!",
-    "createNewDb": "Crear Nueva BD..."
+    "createNewDb": "Crear Nueva BD...",
+    "cloneConnection": "Clonar conexión",
+    "cloneSuffix": "copia"
   },
   "createDbModal": {
     "title": "Crear Nueva Base de Datos Firebird",
