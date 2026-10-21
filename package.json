@@ -20,6 +20,7 @@
   "build": {
     "appId": "com.firebirdyog.app",
     "productName": "FirebirdYog",
+    "npmRebuild": false,
     "icon": "public/icon.png",
     "directories": {
       "output": "release"
