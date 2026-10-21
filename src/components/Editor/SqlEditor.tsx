@@ -16,6 +16,8 @@ import { formatSql } from '../../utils/sqlFormatter';
 
 interface SqlEditorProps {
   sql: string;
+  tabId?: string;
+  openTabIds?: string[];
   onChange: (value: string) => void;
   onExecute: (selectedOnly?: boolean) => void;
   isRunning: boolean;
@@ -37,6 +39,8 @@ interface SqlEditorProps {
 
 export const SqlEditor: React.FC<SqlEditorProps> = ({
   sql,
+  tabId,
+  openTabIds,
   onChange,
   onExecute,
   isRunning,
@@ -76,6 +80,20 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
       });
     }
   }, [acceptOnEnter]);
+
+  // Clean up disposed tab models when tabs are closed
+  useEffect(() => {
+    if (monacoRef.current && openTabIds && openTabIds.length > 0) {
+      const activeUris = new Set(openTabIds.map((id) => `inmemory://tab_${id}.sql`));
+      const models = monacoRef.current.editor?.getModels?.() || [];
+      for (const m of models) {
+        const uri = m.uri?.toString?.() || '';
+        if (uri.startsWith('inmemory://tab_') && !activeUris.has(uri)) {
+          m.dispose();
+        }
+      }
+    }
+  }, [openTabIds]);
 
   const completionDisposableRef = useRef<any>(null);
   const formattingDisposablesRef = useRef<any[]>([]);
@@ -600,6 +618,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           defaultLanguage="sql"
           theme={monacoTheme}
           beforeMount={(monaco) => registerMonacoThemes(monaco)}
+          path={tabId ? `inmemory://tab_${tabId}.sql` : undefined}
           value={sql}
           onChange={(val) => onChange(val || '')}
           onMount={handleEditorDidMount}

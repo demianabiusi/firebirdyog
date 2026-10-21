@@ -756,6 +756,8 @@ END;
           >
             <SqlEditor
               sql={activeTab.sql}
+              tabId={activeTab.id}
+              openTabIds={tabs.map(t => t.id)}
               onChange={handleSqlChange}
               onExecute={handleExecuteQuery}
               isRunning={activeTab.isRunning}
