@@ -42,6 +42,90 @@
   --color-red-950: #fef2f2;
 }
 
+[data-theme="solarized-light"] {
+  color-scheme: light;
+
+  /* Neutrals: Solarized Light Palette (Cálido / Pergamino / Sin blanco puro) */
+  --color-zinc-950: #fdf6e3; /* Main application background / canvas (base3) */
+  --color-zinc-900: #f5eed9; /* Panels, Sidebar, Header, Modals, Cards, Active surfaces */
+  --color-zinc-850: #eee8d5; /* Hover surfaces, active tabs, subtle panels (base2) */
+  --color-zinc-800: #e6dfc8; /* Secondary buttons, subtle pills, table index col */
+  --color-zinc-700: #d5cdb8; /* Crisp borders, dividers, input borders */
+  --color-zinc-600: #c2b99f; /* Checkboxes, subtle icons, muted borders */
+  --color-zinc-500: #839496; /* Muted labels, placeholders, row numbers (base0) */
+  --color-zinc-400: #657b83; /* Secondary text, descriptions (base00) */
+  --color-zinc-300: #586e75; /* Normal body text, grid content (base01) */
+  --color-zinc-200: #073642; /* Prominent text, titles, table headers (base02) */
+  --color-zinc-100: #002b36; /* High contrast headings / dark text (base03) */
+  --color-zinc-50:  #001b22; /* Deepest dark text */
+
+  /* Rich contrast accents for Solarized Light: Teal #2aa198 */
+  --color-amber-500: #2aa198;
+  --color-amber-400: #20877f;
+  --color-amber-300: #166b64;
+  --color-amber-200: #0f524d;
+  --color-amber-600: #186861;
+  --color-amber-950: #e4f2f0;
+
+  --color-emerald-400: #20877f;
+  --color-emerald-300: #166b64;
+  --color-emerald-950: #e4f2f0;
+
+  --color-blue-400: #268bd2;
+  --color-blue-300: #1c689f;
+  --color-blue-950: #e7f1f7;
+
+  --color-purple-400: #6c71c4;
+  --color-purple-300: #555aa0;
+  --color-purple-950: #f0f0fa;
+
+  --color-red-400: #dc322f;
+  --color-red-300: #b32522;
+  --color-red-950: #fbf0ef;
+}
+
+[data-theme="catppuccin-latte"] {
+  color-scheme: light;
+
+  /* Neutrals: Catppuccin Latte Palette (Pastel Nórdico / Suave sin blanco puro) */
+  --color-zinc-950: #eff1f5; /* Main application background / canvas (Base) */
+  --color-zinc-900: #e6e9ef; /* Panels, Sidebar, Header, Modals, Cards, Active surfaces (Mantle) */
+  --color-zinc-850: #dce0e8; /* Hover surfaces, active tabs, subtle panels (Crust) */
+  --color-zinc-800: #ccd0da; /* Secondary buttons, subtle pills, table index col (Surface 0) */
+  --color-zinc-700: #bcc0cc; /* Crisp borders, dividers, input borders (Surface 1) */
+  --color-zinc-600: #acb0be; /* Checkboxes, subtle icons, muted borders (Surface 2) */
+  --color-zinc-500: #9ca0b0; /* Muted labels, placeholders, row numbers (Overlay 0) */
+  --color-zinc-400: #8c8fa1; /* Secondary text, descriptions (Overlay 1) */
+  --color-zinc-300: #5c5f77; /* Normal body text, grid content (Subtext 1) */
+  --color-zinc-200: #4c4f69; /* Prominent text, titles, table headers (Text) */
+  --color-zinc-100: #2c2f45; /* High contrast headings / dark text */
+  --color-zinc-50:  #181a27; /* Deepest dark text */
+
+  /* Rich contrast accents for Catppuccin Latte: Azul pastel #1e66f5 */
+  --color-amber-500: #1e66f5;
+  --color-amber-400: #1754cc;
+  --color-amber-300: #1243a3;
+  --color-amber-200: #0d317a;
+  --color-amber-600: #1754cc;
+  --color-amber-950: #e8f0fe;
+
+  --color-emerald-400: #40a02b;
+  --color-emerald-300: #348223;
+  --color-emerald-950: #eaf6e8;
+
+  --color-blue-400: #1e66f5;
+  --color-blue-300: #1754cc;
+  --color-blue-950: #e8f0fe;
+
+  --color-purple-400: #8839ef;
+  --color-purple-300: #7129cb;
+  --color-purple-950: #f4ecfd;
+
+  --color-red-400: #d20f39;
+  --color-red-300: #ad0c2f;
+  --color-red-950: #fce8eb;
+}
+
 [data-theme="dark"] {
   color-scheme: dark;
 
@@ -312,4 +396,62 @@ code, pre, .font-mono {
 
 [data-theme="light"] .shadow-lg {
   box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+}
+
+/* Solarized Light specific fine-tuning */
+[data-theme="solarized-light"] input,
+[data-theme="solarized-light"] select,
+[data-theme="solarized-light"] textarea {
+  background-color: #fdf6e3;
+  border-color: #d5cdb8;
+  color: #073642;
+}
+
+[data-theme="solarized-light"] input:focus,
+[data-theme="solarized-light"] select:focus,
+[data-theme="solarized-light"] textarea:focus {
+  border-color: #2aa198;
+  outline: none;
+  box-shadow: 0 0 0 1px #2aa198;
+}
+
+[data-theme="solarized-light"] .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(7, 54, 66, 0.15), 0 0 0 1px rgba(7, 54, 66, 0.05);
+}
+
+[data-theme="solarized-light"] .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(7, 54, 66, 0.1), 0 8px 10px -6px rgba(7, 54, 66, 0.05);
+}
+
+[data-theme="solarized-light"] .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(7, 54, 66, 0.08), 0 4px 6px -4px rgba(7, 54, 66, 0.04);
+}
+
+/* Catppuccin Latte specific fine-tuning */
+[data-theme="catppuccin-latte"] input,
+[data-theme="catppuccin-latte"] select,
+[data-theme="catppuccin-latte"] textarea {
+  background-color: #eff1f5;
+  border-color: #bcc0cc;
+  color: #4c4f69;
+}
+
+[data-theme="catppuccin-latte"] input:focus,
+[data-theme="catppuccin-latte"] select:focus,
+[data-theme="catppuccin-latte"] textarea:focus {
+  border-color: #1e66f5;
+  outline: none;
+  box-shadow: 0 0 0 1px #1e66f5;
+}
+
+[data-theme="catppuccin-latte"] .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(76, 79, 105, 0.15), 0 0 0 1px rgba(76, 79, 105, 0.05);
+}
+
+[data-theme="catppuccin-latte"] .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(76, 79, 105, 0.1), 0 8px 10px -6px rgba(76, 79, 105, 0.05);
+}
+
+[data-theme="catppuccin-latte"] .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(76, 79, 105, 0.08), 0 4px 6px -4px rgba(76, 79, 105, 0.04);
 }

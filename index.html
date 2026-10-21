@@ -8,9 +8,10 @@
     <script>
       (function() {
         try {
-          var t = localStorage.getItem('firebirdyog_theme') || 'light';
+          var t = localStorage.getItem('firebirdyog_theme') || 'dark';
           document.documentElement.setAttribute('data-theme', t);
-          document.documentElement.className = t;
+          var isDark = t !== 'light' && t !== 'solarized-light' && t !== 'catppuccin-latte';
+          document.documentElement.className = isDark ? 'dark' : 'light';
         } catch (e) {}
       })();
     </script>

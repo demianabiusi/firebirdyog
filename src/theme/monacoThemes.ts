@@ -124,6 +124,68 @@ export const nordMonacoTheme = {
   },
 };
 
+export const solarizedLightMonacoTheme = {
+  base: 'vs' as const,
+  inherit: true,
+  rules: [
+    { token: '', foreground: '657b83', background: 'fdf6e3' },
+    { token: 'comment', foreground: '93a1a1', fontStyle: 'italic' },
+    { token: 'string', foreground: '2aa198' },
+    { token: 'number', foreground: 'd33682' },
+    { token: 'keyword', foreground: '859900', fontStyle: 'bold' },
+    { token: 'operator', foreground: '859900' },
+    { token: 'type', foreground: 'b58900' },
+    { token: 'function', foreground: '268bd2' },
+    { token: 'identifier', foreground: '586e75' },
+    { token: 'delimiter', foreground: '657b83' },
+    { token: 'key', foreground: '268bd2' },
+    { token: 'string.key.json', foreground: '268bd2' },
+  ],
+  colors: {
+    'editor.background': '#fdf6e3',
+    'editor.foreground': '#657b83',
+    'editor.selectionBackground': '#dcd3bd',
+    'editor.lineHighlightBackground': '#eee8d570',
+    'editorCursor.foreground': '#2aa198',
+    'editorWhitespace.foreground': '#eee8d5',
+    'editorIndentGuide.background': '#d5cdb8',
+    'editorIndentGuide.activeBackground': '#93a1a1',
+    'editorLineNumber.foreground': '#93a1a1',
+    'editorLineNumber.activeForeground': '#586e75',
+  },
+};
+
+export const catppuccinLatteMonacoTheme = {
+  base: 'vs' as const,
+  inherit: true,
+  rules: [
+    { token: '', foreground: '4c4f69', background: 'eff1f5' },
+    { token: 'comment', foreground: '9ca0b0', fontStyle: 'italic' },
+    { token: 'string', foreground: '40a02b' },
+    { token: 'number', foreground: 'fe640b' },
+    { token: 'keyword', foreground: '8839ef', fontStyle: 'bold' },
+    { token: 'operator', foreground: '04a5e5' },
+    { token: 'type', foreground: 'df8e1d' },
+    { token: 'function', foreground: '1e66f5' },
+    { token: 'identifier', foreground: '4c4f69' },
+    { token: 'delimiter', foreground: '7c7f93' },
+    { token: 'key', foreground: '1e66f5' },
+    { token: 'string.key.json', foreground: '1e66f5' },
+  ],
+  colors: {
+    'editor.background': '#eff1f5',
+    'editor.foreground': '#4c4f69',
+    'editor.selectionBackground': '#acb0be45',
+    'editor.lineHighlightBackground': '#e6e9ef90',
+    'editorCursor.foreground': '#1e66f5',
+    'editorWhitespace.foreground': '#ccd0da',
+    'editorIndentGuide.background': '#ccd0da',
+    'editorIndentGuide.activeBackground': '#8c8fa1',
+    'editorLineNumber.foreground': '#9ca0b0',
+    'editorLineNumber.activeForeground': '#1e66f5',
+  },
+};
+
 let themesRegistered = false;
 
 export function registerMonacoThemes(monaco: any) {
@@ -133,6 +195,8 @@ export function registerMonacoThemes(monaco: any) {
     monaco.editor.defineTheme('tokyo-night', tokyoNightMonacoTheme);
     monaco.editor.defineTheme('solarized', solarizedMonacoTheme);
     monaco.editor.defineTheme('nord', nordMonacoTheme);
+    monaco.editor.defineTheme('solarized-light', solarizedLightMonacoTheme);
+    monaco.editor.defineTheme('catppuccin-latte', catppuccinLatteMonacoTheme);
     themesRegistered = true;
   } catch (err) {
     console.error('Failed to register Monaco themes:', err);
@@ -143,6 +207,10 @@ export function getMonacoThemeName(theme: Theme): string {
   switch (theme) {
     case 'light':
       return 'vs';
+    case 'solarized-light':
+      return 'solarized-light';
+    case 'catppuccin-latte':
+      return 'catppuccin-latte';
     case 'dark':
       return 'vs-dark';
     case 'dracula':

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { getMonacoThemeName } from './monacoThemes';
 
-export type Theme = 'dark' | 'light' | 'dracula' | 'tokyo-night' | 'solarized' | 'nord';
+export type Theme = 'dark' | 'light' | 'solarized-light' | 'catppuccin-latte' | 'dracula' | 'tokyo-night' | 'solarized' | 'nord';
 
 export interface ThemeDefinition {
   id: Theme;
@@ -33,6 +33,26 @@ export const availableThemes: ThemeDefinition[] = [
     accent: 'Verde oscuro',
     accentHex: '#047857',
     monacoTheme: 'vs',
+    isDark: false,
+  },
+  {
+    id: 'solarized-light',
+    name: 'Solarized Light',
+    icon: '📜',
+    bg: '#fdf6e3',
+    accent: 'Teal cálido #2aa198',
+    accentHex: '#2aa198',
+    monacoTheme: 'solarized-light',
+    isDark: false,
+  },
+  {
+    id: 'catppuccin-latte',
+    name: 'Catppuccin Latte',
+    icon: '🪻',
+    bg: '#eff1f5',
+    accent: 'Azul pastel #1e66f5',
+    accentHex: '#1e66f5',
+    monacoTheme: 'catppuccin-latte',
     isDark: false,
   },
   {
