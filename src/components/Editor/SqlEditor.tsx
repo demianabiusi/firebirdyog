@@ -19,7 +19,7 @@ interface SqlEditorProps {
   tabId?: string;
   openTabIds?: string[];
   onChange: (value: string) => void;
-  onExecute: (selectedOnly?: boolean) => void;
+  onExecute: (selectedSql?: string) => void;
   isRunning: boolean;
   maxRows: number;
   onChangeMaxRows: (val: number) => void;
@@ -347,14 +347,21 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
       },
     });
 
-    // Ctrl+Enter: execute all or selected
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+    const triggerExecute = () => {
       const selection = editor.getSelection();
       if (selection && !selection.isEmpty()) {
-        onExecuteRef.current(true);
-      } else {
-        onExecuteRef.current(false);
+        const selectedText = editor.getModel()?.getValueInRange(selection);
+        if (selectedText && selectedText.trim()) {
+          onExecuteRef.current(selectedText);
+          return;
+        }
       }
+      onExecuteRef.current();
+    };
+
+    // Ctrl+Enter: execute all or selected
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      triggerExecute();
     });
 
     // Intercept editor keydown to prevent browser/Electron refresh on F5 or F9 or browser default on Ctrl+Shift+F
@@ -375,7 +382,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           : e.keyCode === monaco.KeyCode.F9;
 
         if (shouldExecute) {
-          onExecuteRef.current(false);
+          triggerExecute();
         }
       }
     });
@@ -391,11 +398,14 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
     if (editorRef.current) {
       const selection = editorRef.current.getSelection();
       if (selection && !selection.isEmpty()) {
-        onExecute(true);
-        return;
+        const selectedText = editorRef.current.getModel()?.getValueInRange(selection);
+        if (selectedText && selectedText.trim()) {
+          onExecute(selectedText);
+          return;
+        }
       }
     }
-    onExecute(false);
+    onExecute();
   };
 
   const handleSaveToFile = async () => {
@@ -499,7 +509,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
         {/* Left Execution buttons */}
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => onExecute(false)}
+            onClick={handleExecuteSelected}
             disabled={isRunning || !sql.trim()}
             title={t('editor.executeTooltip')}
             className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-medium disabled:opacity-50 transition-colors shadow-xs"

@@ -248,8 +248,8 @@ export const App: React.FC = () => {
   const isConnectedRef = useRef(isConnected);
   useEffect(() => { isConnectedRef.current = isConnected; }, [isConnected]);
 
-  // Execute active query
-  const handleExecuteQuery = useCallback(async (selectedOnly: boolean = false) => {
+  // Execute active query (full tab or selected portion)
+  const handleExecuteQuery = useCallback(async (selectedSql?: string) => {
     if (!isConnectedRef.current) {
       // If user clicked or pressed execute while not connected, prompt to connect
       setIsConnectionModalOpen(true);
@@ -260,7 +260,10 @@ export const App: React.FC = () => {
     const currentTab = tabsRef.current.find(t => t.id === targetTabId);
     if (!currentTab) return;
 
-    const queryToRun = currentTab.sql.trim();
+    const queryToRun = (typeof selectedSql === 'string' && selectedSql.trim())
+      ? selectedSql.trim()
+      : currentTab.sql.trim();
+
     if (!queryToRun) return;
 
     // Set tab running state
@@ -286,6 +289,11 @@ export const App: React.FC = () => {
                 } 
               : t
           ));
+
+          // If query was DDL, refresh schema automatically so sidebar updates
+          if (/\b(CREATE|ALTER|DROP|RECREATE)\b/i.test(queryToRun)) {
+            refreshSchema();
+          }
 
           // Append to history
           setHistory(prev => [
@@ -400,7 +408,7 @@ export const App: React.FC = () => {
     setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, sql } : t));
     if (executeImmediately && isConnected) {
       setTimeout(() => {
-        handleExecuteQuery(false);
+        handleExecuteQuery();
       }, 50);
     }
   };
@@ -456,7 +464,7 @@ export const App: React.FC = () => {
         e.preventDefault();
         e.stopPropagation();
         if (isConnectedRef.current) {
-          handleExecuteQuery(false);
+          handleExecuteQuery();
         }
       } else if (isRefreshKey) {
         e.preventDefault();

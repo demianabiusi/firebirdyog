@@ -325,13 +325,132 @@ export class FirebirdService {
     // Trim whitespace
     s = s.trim();
 
-    // Remove trailing delimiter symbols like ^, ~, #, or whitespace at the end
-    s = s.replace(/[\s\^~#@!]+$/g, '');
+    // Remove trailing delimiter symbols like ;, ^, ~, #, or whitespace at the end
+    s = s.replace(/[\s\^~#@!;]+$/g, '');
 
     return s.trim();
   }
 
-  public async executeQuery(sql: string, maxRows: number = 1000): Promise<{
+  public splitSqlStatements(script: string): string[] {
+    const statements: string[] = [];
+    let currentDelimiter = ';';
+    let currentStmt = '';
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inBlockComment = false;
+    let inLineComment = false;
+    let beginDepth = 0;
+
+    let i = 0;
+    const len = script.length;
+
+    while (i < len) {
+      const char = script[i];
+      const nextChar = i + 1 < len ? script[i + 1] : '';
+
+      // Line comment: -- ...
+      if (!inSingleQuote && !inDoubleQuote && !inBlockComment && char === '-' && nextChar === '-') {
+        inLineComment = true;
+        i += 2;
+        continue;
+      }
+      if (inLineComment) {
+        if (char === '\n') {
+          inLineComment = false;
+        }
+        i++;
+        continue;
+      }
+
+      // Block comment: /* ... */
+      if (!inSingleQuote && !inDoubleQuote && !inLineComment && char === '/' && nextChar === '*') {
+        inBlockComment = true;
+        i += 2;
+        continue;
+      }
+      if (inBlockComment) {
+        if (char === '*' && nextChar === '/') {
+          inBlockComment = false;
+          i += 2;
+        } else {
+          i++;
+        }
+        continue;
+      }
+
+      // String literals: '...'
+      if (char === "'" && !inDoubleQuote) {
+        if (inSingleQuote && nextChar === "'") {
+          currentStmt += "''";
+          i += 2;
+          continue;
+        }
+        inSingleQuote = !inSingleQuote;
+        currentStmt += char;
+        i++;
+        continue;
+      }
+
+      // Delimited identifiers: "..."
+      if (char === '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+        currentStmt += char;
+        i++;
+        continue;
+      }
+
+      if (!inSingleQuote && !inDoubleQuote) {
+        // Detect SET TERM directive (e.g. SET TERM ^ ; or SET TERM ; ^)
+        const remaining = script.slice(i);
+        const setTermMatch = remaining.match(/^SET\s+TERM\s+(\S+)(?:\s+(\S+)|\s*)/i);
+        if (setTermMatch && (i === 0 || /\s/.test(script[i - 1]))) {
+          const cleanedPrior = this.cleanSqlForExecution(currentStmt);
+          if (cleanedPrior) {
+            statements.push(cleanedPrior);
+          }
+          currentStmt = '';
+          currentDelimiter = setTermMatch[1];
+          const fullMatch = remaining.match(/^SET\s+TERM\s+[^\r\n;]+(?:[;\r\n]|\s*)/i);
+          i += fullMatch ? fullMatch[0].length : setTermMatch[0].length;
+          continue;
+        }
+
+        // Track BEGIN / END nesting when delimiter is semicolon
+        if (currentDelimiter === ';') {
+          if (/^\bBEGIN\b/i.test(remaining)) {
+            beginDepth++;
+          } else if (/^\bEND\b/i.test(remaining)) {
+            if (beginDepth > 0) beginDepth--;
+          }
+        }
+
+        // Delimiter check
+        if (remaining.startsWith(currentDelimiter)) {
+          if (currentDelimiter !== ';' || beginDepth === 0) {
+            const cleaned = this.cleanSqlForExecution(currentStmt);
+            if (cleaned) {
+              statements.push(cleaned);
+            }
+            currentStmt = '';
+            i += currentDelimiter.length;
+            continue;
+          }
+        }
+      }
+
+      currentStmt += char;
+      i++;
+    }
+
+    const cleanedFinal = this.cleanSqlForExecution(currentStmt);
+    if (cleanedFinal) {
+      statements.push(cleanedFinal);
+    }
+
+    return statements;
+  }
+
+  private async executeSingleStatement(sql: string, maxRows: number = 1000): Promise<{
     columns: string[];
     rows: Record<string, any>[];
     rowCount: number;
@@ -422,86 +541,73 @@ export class FirebirdService {
     });
   }
 
-  public splitSqlStatements(script: string): string[] {
-    const cleaned = this.cleanSqlForExecution(script);
-    const statements: string[] = [];
-    let current = '';
-    let inSingleQuote = false;
-    let inDoubleQuote = false;
-    let inBlockComment = false;
-    let inLineComment = false;
-    let beginDepth = 0;
-
-    for (let i = 0; i < cleaned.length; i++) {
-      const char = cleaned[i];
-      const nextChar = cleaned[i + 1] || '';
-
-      // Line comment
-      if (!inSingleQuote && !inDoubleQuote && !inBlockComment && char === '-' && nextChar === '-') {
-        inLineComment = true;
-        i++;
-        continue;
-      }
-      if (inLineComment) {
-        if (char === '\n') inLineComment = false;
-        continue;
-      }
-
-      // Block comment
-      if (!inSingleQuote && !inDoubleQuote && !inLineComment && char === '/' && nextChar === '*') {
-        inBlockComment = true;
-        i++;
-        continue;
-      }
-      if (inBlockComment) {
-        if (char === '*' && nextChar === '/') {
-          inBlockComment = false;
-          i++;
-        }
-        continue;
-      }
-
-      // Quotes
-      if (char === "'" && !inDoubleQuote) {
-        inSingleQuote = !inSingleQuote;
-        current += char;
-        continue;
-      }
-      if (char === '"' && !inSingleQuote) {
-        inDoubleQuote = !inDoubleQuote;
-        current += char;
-        continue;
-      }
-
-      if (!inSingleQuote && !inDoubleQuote) {
-        // Detect BEGIN and END keywords for procedures/triggers
-        const remaining = cleaned.slice(i).toUpperCase();
-        if (/^\bBEGIN\b/.test(remaining)) {
-          beginDepth++;
-        } else if (/^\bEND\b/.test(remaining)) {
-          if (beginDepth > 0) beginDepth--;
-        }
-
-        // Semicolon delimiter
-        if (char === ';') {
-          if (beginDepth === 0) {
-            if (current.trim()) {
-              statements.push(current.trim());
-            }
-            current = '';
-            continue;
-          }
-        }
-      }
-
-      current += char;
+  public async executeQuery(sql: string, maxRows: number = 1000): Promise<{
+    columns: string[];
+    rows: Record<string, any>[];
+    rowCount: number;
+    affectedRows?: number;
+    executionTimeMs: number;
+    sql: string;
+    hasMore?: boolean;
+  }> {
+    if (!this.activeDb) {
+      throw new Error('No hay conexión activa a la base de datos Firebird.');
     }
 
-    if (current.trim()) {
-      statements.push(current.trim());
+    if (!sql || !sql.trim()) {
+      throw new Error('La consulta está vacía.');
     }
 
-    return statements;
+    const statements = this.splitSqlStatements(sql);
+    if (statements.length === 0) {
+      throw new Error('La consulta solo contiene comentarios o está vacía.');
+    }
+
+    // Single statement execution
+    if (statements.length === 1) {
+      return this.executeSingleStatement(statements[0], maxRows);
+    }
+
+    // Multi-statement script execution
+    const startTime = Date.now();
+    let totalAffected = 0;
+    let lastRowsetResult: any = null;
+
+    for (let i = 0; i < statements.length; i++) {
+      const stmt = statements[i];
+      try {
+        const res = await this.executeSingleStatement(stmt, maxRows);
+        if (typeof res.affectedRows === 'number') {
+          totalAffected += res.affectedRows;
+        }
+        if (res.rows && res.rows.length > 0 && !(res.columns.length === 1 && res.columns[0] === 'RESULT')) {
+          lastRowsetResult = res;
+        }
+      } catch (err: any) {
+        const snippet = stmt.length > 90 ? stmt.substring(0, 90).replace(/\s+/g, ' ') + '...' : stmt.replace(/\s+/g, ' ');
+        const errMsg = err?.message || String(err);
+        throw new Error(`Error en sentencia ${i + 1} de ${statements.length} [${snippet}]: ${errMsg}`);
+      }
+    }
+
+    const totalTime = Date.now() - startTime;
+
+    if (lastRowsetResult) {
+      return {
+        ...lastRowsetResult,
+        executionTimeMs: totalTime,
+        sql
+      };
+    }
+
+    return {
+      columns: ['RESULT'],
+      rows: [{ RESULT: `${statements.length} sentencias ejecutadas exitosamente en ${totalTime} ms.` }],
+      rowCount: 1,
+      affectedRows: totalAffected,
+      executionTimeMs: totalTime,
+      sql
+    };
   }
 
   public async executeScript(script: string): Promise<{ statementsExecuted: number; results: any[] }> {
@@ -510,7 +616,7 @@ export class FirebirdService {
 
     for (const stmt of statements) {
       if (!stmt.trim()) continue;
-      const res = await this.executeQuery(stmt);
+      const res = await this.executeSingleStatement(stmt);
       results.push(res);
     }
 
