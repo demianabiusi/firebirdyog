@@ -81,6 +81,11 @@ function getAppIcon(): NativeImage | string | undefined {
 
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
+      // En Linux, devolver la ruta absoluta permite que GTK (gtk_window_set_icon_from_file)
+      // cargue y escale el icono de la ventana de forma nativa para el gestor de ventanas
+      if (process.platform === 'linux') {
+        return p;
+      }
       try {
         const img = nativeImage.createFromPath(p);
         if (!img.isEmpty()) {
@@ -140,7 +145,7 @@ function createWindow() {
   }
   mainWindow.show();
 
-  if (appIcon && typeof appIcon !== 'string') {
+  if (appIcon) {
     mainWindow.setIcon(appIcon);
   }
 
@@ -174,8 +179,10 @@ function createWindow() {
   });
 }
 
+// En Linux y Windows, asignar el nombre antes de whenReady asegura que el WM_CLASS y el AppUserModelId se configuren tempranamente
+app.name = 'firebirdyog';
+
 app.whenReady().then(() => {
-  app.setName('FirebirdYog');
   createWindow();
 
   app.on('activate', () => {
