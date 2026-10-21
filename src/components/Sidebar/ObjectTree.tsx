@@ -21,19 +21,50 @@ import {
   Copy,
   Trash2,
   FileText,
-  Layers,
   Check,
-  Network
+  Network,
+  Key,
+  ArrowDownRight,
+  ArrowUpRight
 } from 'lucide-react';
+
+interface ProcedureParamDetail {
+  name: string;
+  type: string;
+}
+
+interface TableColumnDetail {
+  name: string;
+  type: string;
+  notNull: boolean;
+  isPk: boolean;
+}
 
 interface SchemaObjects {
   tables: string[];
   views: string[];
-  procedures: { name: string; inputs: number; outputs: number; inputParams?: string[] }[];
-  triggers: { name: string; table: string; inactive: boolean }[];
+  procedures: {
+    name: string;
+    inputs: number;
+    outputs: number;
+    inputParams?: string[];
+    inputParamDetails?: ProcedureParamDetail[];
+    outputParamDetails?: ProcedureParamDetail[];
+  }[];
+  triggers: {
+    name: string;
+    table: string;
+    inactive: boolean;
+    event?: string;
+    sequence?: number;
+  }[];
   generators: string[];
   domains: string[];
   exceptions: string[];
+  columnsByTable?: Record<string, string[]>;
+  tableColumnDetails?: Record<string, TableColumnDetail[]>;
+  domainDetails?: Record<string, { type: string; notNull: boolean }>;
+  exceptionDetails?: Record<string, string>;
 }
 
 interface ObjectTreeProps {
@@ -50,6 +81,14 @@ interface ObjectTreeProps {
   onCreateView?: () => void;
   onCreateTrigger?: () => void;
   databaseName?: string;
+}
+
+function formatCompactType(typeStr: string): string {
+  if (!typeStr) return '';
+  return typeStr
+    .replace('BLOB SUB_TYPE TEXT', 'BLOB TEXT')
+    .replace('BLOB SUB_TYPE BINARY', 'BLOB BIN')
+    .replace('DOUBLE PRECISION', 'DOUBLE');
 }
 
 function buildProcedureCall(proc: { name: string; inputs: number; outputs: number; inputParams?: string[] }): { sql: string; hasInputParams: boolean } {
@@ -122,6 +161,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
     domains: true,
     exceptions: true
   });
+  const [expandedObjects, setExpandedObjects] = useState<Record<string, boolean>>({});
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -151,6 +191,11 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
 
   const toggleSection = (key: string) => {
     setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleObjectExpand = (e: React.MouseEvent, key: string) => {
+    e.stopPropagation();
+    setExpandedObjects(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const openContextMenu = (e: React.MouseEvent, itemType: ContextMenuItemType, name: string = '', meta?: any) => {
@@ -201,14 +246,14 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
   const filteredProcedures = useMemo(() => {
     if (!objects?.procedures || !Array.isArray(objects.procedures)) return [];
     return objects.procedures
-      .filter((p): p is { name: string; inputs: number; outputs: number } => Boolean(p && typeof p.name === 'string'))
+      .filter((p): p is SchemaObjects['procedures'][number] => Boolean(p && typeof p.name === 'string'))
       .filter(p => p.name.toLowerCase().includes(filterText));
   }, [objects?.procedures, filterText]);
 
   const filteredTriggers = useMemo(() => {
     if (!objects?.triggers || !Array.isArray(objects.triggers)) return [];
     return objects.triggers
-      .filter((t): t is { name: string; table: string; inactive: boolean } => Boolean(t && typeof t.name === 'string'))
+      .filter((t): t is SchemaObjects['triggers'][number] => Boolean(t && typeof t.name === 'string'))
       .filter(t => 
         t.name.toLowerCase().includes(filterText) || 
         (typeof t.table === 'string' && t.table.toLowerCase().includes(filterText))
@@ -241,6 +286,13 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
     const clean = databaseName.replace(/\\/g, '/');
     return clean.split('/').filter(Boolean).pop() || 'Explorador Firebird';
   }, [databaseName]);
+
+  const getColumnsForRelation = (relationName: string): TableColumnDetail[] => {
+    const detailed = objects?.tableColumnDetails?.[relationName];
+    if (detailed && detailed.length > 0) return detailed;
+    const names = objects?.columnsByTable?.[relationName] || [];
+    return names.map(name => ({ name, type: '', notNull: false, isPk: false }));
+  };
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 border-r border-zinc-800 select-none text-zinc-300 relative">
@@ -325,61 +377,137 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
           </div>
 
           {!collapsedSections.tables && (
-            <div className="ml-4 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
+            <div className="ml-3 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
               {filteredTables.length === 0 ? (
                 <div className="text-[11px] text-zinc-500 py-1 pl-2 italic">Sin tablas</div>
               ) : (
-                filteredTables.map((table) => (
-                  <div
-                    key={table}
-                    onContextMenu={(e) => openContextMenu(e, 'TABLE', table)}
-                    className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-zinc-100 transition-colors"
-                  >
-                    <div
-                      className="flex items-center gap-2 min-w-0 flex-1 truncate"
-                      onClick={() => onSelectObjectSql(`SELECT * FROM ${table} ROWS 100;`, true)}
-                      title={`Clic: consultar | Clic derecho: menú contextual`}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                      <span className="truncate font-mono text-[11.5px]">{table}</span>
-                    </div>
+                filteredTables.map((table) => {
+                  const objKey = `table:${table}`;
+                  const isExpanded = Boolean(expandedObjects[objKey]);
+                  const cols = getColumnsForRelation(table);
 
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {onDesignTable && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDesignTable(table);
-                          }}
-                          title="Diseñar / Modificar Tabla"
-                          className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-400 rounded"
-                        >
-                          <Sliders className="w-3 h-3" />
-                        </button>
+                  return (
+                    <div key={table} className="space-y-0.5">
+                      <div
+                        onContextMenu={(e) => openContextMenu(e, 'TABLE', table)}
+                        className="group flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-zinc-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-1 min-w-0 flex-1 truncate">
+                          <button
+                            type="button"
+                            onClick={(e) => toggleObjectExpand(e, objKey)}
+                            title={isExpanded ? 'Ocultar campos' : `Mostrar campos (${cols.length})`}
+                            className="p-0.5 rounded hover:bg-zinc-700/80 text-zinc-500 hover:text-blue-400 transition-colors shrink-0"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-3 h-3 text-blue-400" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3" />
+                            )}
+                          </button>
+
+                          <div
+                            className="flex items-center gap-1.5 min-w-0 flex-1 truncate"
+                            onClick={() => onSelectObjectSql(`SELECT * FROM ${table} ROWS 100;`, true)}
+                            title="Clic: consultar primeros 100 | Flecha: ver campos | Clic derecho: menú"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                            <span className="truncate font-mono text-[11.5px]">{table}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {cols.length > 0 && (
+                            <span className="text-[9px] text-zinc-500 font-mono mr-0.5 group-hover:hidden">
+                              {cols.length}
+                            </span>
+                          )}
+                          <div className="hidden group-hover:flex items-center gap-0.5">
+                            {onDesignTable && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDesignTable(table);
+                                }}
+                                title="Diseñar / Modificar Tabla"
+                                className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-400 rounded"
+                              >
+                                <Sliders className="w-3 h-3" />
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onShowTableDetails(table);
+                              }}
+                              title="Ver Detalles e Índices"
+                              className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-blue-300 rounded"
+                            >
+                              <Info className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectObjectSql(`SELECT * FROM ${table} ROWS 100;`, true);
+                              }}
+                              title="Consultar Primeros 100 Registros"
+                              className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
+                            >
+                              <Play className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="ml-3.5 pl-2 border-l border-blue-500/25 py-0.5 space-y-0.5 bg-zinc-950/35 rounded-r-md">
+                          {cols.length === 0 ? (
+                            <div className="text-[10px] text-zinc-500 italic px-1.5 py-0.5">
+                              Sin columnas
+                            </div>
+                          ) : (
+                            cols.map((col) => (
+                              <div
+                                key={col.name}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(col.name);
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectObjectSql(`SELECT ${col.name} FROM ${table} ROWS 100;`, true);
+                                }}
+                                title={`${col.name} — ${col.type}${col.notNull ? ' NOT NULL' : ''}${col.isPk ? ' (Primary Key)' : ''}\nClic: copiar nombre | Doble clic: consultar columna`}
+                                className="flex items-center justify-between gap-2 px-1.5 py-0.5 rounded hover:bg-zinc-800/70 cursor-pointer text-[11px] group/col transition-colors"
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                  {col.isPk ? (
+                                    <Key className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                  ) : (
+                                    <span className="w-1 h-1 rounded-full bg-zinc-600 group-hover/col:bg-blue-400 shrink-0 ml-0.5 mr-0.5" />
+                                  )}
+                                  <span className={`font-mono truncate ${col.isPk ? 'text-amber-200 font-medium' : 'text-zinc-300 group-hover/col:text-zinc-100'}`}>
+                                    {col.name}
+                                  </span>
+                                  {col.notNull && (
+                                    <span className="text-[9px] text-amber-500/80 font-bold shrink-0" title="NOT NULL">
+                                      *
+                                    </span>
+                                  )}
+                                </div>
+                                {col.type && (
+                                  <span className="text-[9.5px] font-mono text-blue-300/80 bg-zinc-900/90 border border-zinc-800 px-1.5 py-0.2 rounded shrink-0">
+                                    {formatCompactType(col.type)}
+                                  </span>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
                       )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onShowTableDetails(table);
-                        }}
-                        title="Ver Detalles e Índices"
-                        className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-blue-300 rounded"
-                      >
-                        <Info className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectObjectSql(`SELECT * FROM ${table} ROWS 100;`, true);
-                        }}
-                        title="Consultar Primeros 100 Registros"
-                        className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
-                      >
-                        <Play className="w-3 h-3" />
-                      </button>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -422,49 +550,116 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
           </div>
 
           {!collapsedSections.views && (
-            <div className="ml-4 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
+            <div className="ml-3 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
               {filteredViews.length === 0 ? (
                 <div className="text-[11px] text-zinc-500 py-1 pl-2 italic">Sin vistas</div>
               ) : (
-                filteredViews.map((view) => (
-                  <div
-                    key={view}
-                    onContextMenu={(e) => openContextMenu(e, 'VIEW', view)}
-                    className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-teal-300 transition-colors"
-                  >
-                    <div
-                      className="flex items-center gap-2 min-w-0 flex-1 truncate"
-                      onClick={() => onSelectObjectSql(`SELECT * FROM ${view} ROWS 100;`, true)}
-                      title={`Clic: consultar | Clic derecho: menú contextual`}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
-                      <span className="truncate font-mono text-[11.5px]">{view}</span>
-                    </div>
+                filteredViews.map((view) => {
+                  const objKey = `view:${view}`;
+                  const isExpanded = Boolean(expandedObjects[objKey]);
+                  const cols = getColumnsForRelation(view);
 
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEditObject('VIEW', view);
-                        }}
-                        title="Editar / Ver DDL de la Vista"
-                        className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-teal-300 rounded"
+                  return (
+                    <div key={view} className="space-y-0.5">
+                      <div
+                        onContextMenu={(e) => openContextMenu(e, 'VIEW', view)}
+                        className="group flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-teal-300 transition-colors"
                       >
-                        <Code className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectObjectSql(`SELECT * FROM ${view} ROWS 100;`, true);
-                        }}
-                        title="Ejecutar SELECT"
-                        className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
-                      >
-                        <Play className="w-3 h-3" />
-                      </button>
+                        <div className="flex items-center gap-1 min-w-0 flex-1 truncate">
+                          <button
+                            type="button"
+                            onClick={(e) => toggleObjectExpand(e, objKey)}
+                            title={isExpanded ? 'Ocultar campos' : `Mostrar campos (${cols.length})`}
+                            className="p-0.5 rounded hover:bg-zinc-700/80 text-zinc-500 hover:text-teal-400 transition-colors shrink-0"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-3 h-3 text-teal-400" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3" />
+                            )}
+                          </button>
+
+                          <div
+                            className="flex items-center gap-1.5 min-w-0 flex-1 truncate"
+                            onClick={() => onSelectObjectSql(`SELECT * FROM ${view} ROWS 100;`, true)}
+                            title="Clic: consultar primeros 100 | Flecha: ver campos | Clic derecho: menú"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
+                            <span className="truncate font-mono text-[11.5px]">{view}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {cols.length > 0 && (
+                            <span className="text-[9px] text-zinc-500 font-mono mr-0.5 group-hover:hidden">
+                              {cols.length}
+                            </span>
+                          )}
+                          <div className="hidden group-hover:flex items-center gap-0.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditObject('VIEW', view);
+                              }}
+                              title="Editar / Ver DDL de la Vista"
+                              className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-teal-300 rounded"
+                            >
+                              <Code className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectObjectSql(`SELECT * FROM ${view} ROWS 100;`, true);
+                              }}
+                              title="Ejecutar SELECT"
+                              className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
+                            >
+                              <Play className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="ml-3.5 pl-2 border-l border-teal-500/25 py-0.5 space-y-0.5 bg-zinc-950/35 rounded-r-md">
+                          {cols.length === 0 ? (
+                            <div className="text-[10px] text-zinc-500 italic px-1.5 py-0.5">
+                              Sin columnas
+                            </div>
+                          ) : (
+                            cols.map((col) => (
+                              <div
+                                key={col.name}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(col.name);
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectObjectSql(`SELECT ${col.name} FROM ${view} ROWS 100;`, true);
+                                }}
+                                title={`${col.name} — ${col.type}\nClic: copiar nombre | Doble clic: consultar columna`}
+                                className="flex items-center justify-between gap-2 px-1.5 py-0.5 rounded hover:bg-zinc-800/70 cursor-pointer text-[11px] group/col transition-colors"
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                  <span className="w-1 h-1 rounded-full bg-zinc-600 group-hover/col:bg-teal-400 shrink-0 ml-0.5 mr-0.5" />
+                                  <span className="font-mono truncate text-zinc-300 group-hover/col:text-zinc-100">
+                                    {col.name}
+                                  </span>
+                                </div>
+                                {col.type && (
+                                  <span className="text-[9.5px] font-mono text-teal-300/80 bg-zinc-900/90 border border-zinc-800 px-1.5 py-0.2 rounded shrink-0">
+                                    {formatCompactType(col.type)}
+                                  </span>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -507,61 +702,159 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
           </div>
 
           {!collapsedSections.procedures && (
-            <div className="ml-4 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
+            <div className="ml-3 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
               {filteredProcedures.length === 0 ? (
                 <div className="text-[11px] text-zinc-500 py-1 pl-2 italic">Sin procedimientos</div>
               ) : (
-                filteredProcedures.map((proc) => (
-                  <div
-                    key={proc.name}
-                    onContextMenu={(e) => openContextMenu(e, 'PROCEDURE', proc.name, proc)}
-                    className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-amber-300 transition-colors"
-                  >
-                    <div
-                      className="flex items-center gap-2 min-w-0 flex-1 truncate"
-                      onClick={() => {
-                        const { sql } = buildProcedureCall(proc);
-                        onSelectObjectSql(sql, false);
-                      }}
-                      onDoubleClick={() => onEditObject('PROCEDURE', proc.name)}
-                      title={`Clic: consultar plantilla | Clic derecho: menú contextual`}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                      <span className="truncate font-mono text-[11.5px]">{proc.name}</span>
-                    </div>
+                filteredProcedures.map((proc) => {
+                  const objKey = `proc:${proc.name}`;
+                  const isExpanded = Boolean(expandedObjects[objKey]);
+                  const inParams = proc.inputParamDetails || (proc.inputParams || []).map(p => ({ name: p, type: '' }));
+                  const outParams = proc.outputParamDetails || [];
 
-                    <div className="flex items-center gap-1">
-                      <span className="text-[9px] text-zinc-500 mr-1 group-hover:hidden">
-                        in:{proc.inputs} out:{proc.outputs}
-                      </span>
-                      
-                      <div className="hidden group-hover:flex items-center gap-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditObject('PROCEDURE', proc.name);
-                          }}
-                          title="Editar / Ver Código (DDL)"
-                          className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-300 rounded"
-                        >
-                          <Code className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const { sql, hasInputParams } = buildProcedureCall(proc);
-                            // If procedure expects input parameters, don't auto-execute so user can fill them in
-                            onSelectObjectSql(sql, !hasInputParams);
-                          }}
-                          title="Ejecutar"
-                          className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
-                        >
-                          <Play className="w-3 h-3" />
-                        </button>
+                  return (
+                    <div key={proc.name} className="space-y-0.5">
+                      <div
+                        onContextMenu={(e) => openContextMenu(e, 'PROCEDURE', proc.name, proc)}
+                        className="group flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-amber-300 transition-colors"
+                      >
+                        <div className="flex items-center gap-1 min-w-0 flex-1 truncate">
+                          <button
+                            type="button"
+                            onClick={(e) => toggleObjectExpand(e, objKey)}
+                            title={isExpanded ? 'Ocultar parámetros' : 'Mostrar parámetros de entrada y salida'}
+                            className="p-0.5 rounded hover:bg-zinc-700/80 text-zinc-500 hover:text-amber-400 transition-colors shrink-0"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-3 h-3 text-amber-400" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3" />
+                            )}
+                          </button>
+
+                          <div
+                            className="flex items-center gap-1.5 min-w-0 flex-1 truncate"
+                            onClick={() => {
+                              const { sql } = buildProcedureCall(proc);
+                              onSelectObjectSql(sql, false);
+                            }}
+                            onDoubleClick={() => onEditObject('PROCEDURE', proc.name)}
+                            title="Clic: cargar plantilla SQL | Doble clic: editar DDL | Flecha: ver parámetros"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                            <span className="truncate font-mono text-[11.5px]">{proc.name}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-zinc-500 mr-1 group-hover:hidden font-mono">
+                            in:{proc.inputs} out:{proc.outputs}
+                          </span>
+                          
+                          <div className="hidden group-hover:flex items-center gap-0.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditObject('PROCEDURE', proc.name);
+                              }}
+                              title="Editar / Ver Código (DDL)"
+                              className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-amber-300 rounded"
+                            >
+                              <Code className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const { sql, hasInputParams } = buildProcedureCall(proc);
+                                onSelectObjectSql(sql, !hasInputParams);
+                              }}
+                              title="Ejecutar"
+                              className="p-1 hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 rounded"
+                            >
+                              <Play className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
+
+                      {isExpanded && (
+                        <div className="ml-3.5 pl-2 border-l border-amber-500/25 py-1 space-y-1.5 bg-zinc-950/35 rounded-r-md">
+                          {/* Input Parameters */}
+                          <div>
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-sky-400/90">
+                              <ArrowDownRight className="w-3 h-3 shrink-0" />
+                              <span>Entrada (IN: {inParams.length})</span>
+                            </div>
+                            {inParams.length === 0 ? (
+                              <div className="text-[10px] text-zinc-500 italic pl-5 py-0.5">
+                                Sin parámetros de entrada
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5 mt-0.5">
+                                {inParams.map((param) => (
+                                  <div
+                                    key={`in-${param.name}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyToClipboard(param.name);
+                                    }}
+                                    title={`Parámetro de entrada: ${param.name} (${param.type}) — Clic para copiar`}
+                                    className="flex items-center justify-between gap-2 pl-4 pr-1.5 py-0.5 rounded hover:bg-zinc-800/70 cursor-pointer text-[11px] group/param transition-colors"
+                                  >
+                                    <span className="font-mono truncate text-zinc-300 group-hover/param:text-sky-200">
+                                      {param.name}
+                                    </span>
+                                    {param.type && (
+                                      <span className="text-[9.5px] font-mono text-sky-300/90 bg-sky-950/40 border border-sky-800/40 px-1.5 py-0.2 rounded shrink-0">
+                                        {formatCompactType(param.type)}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Output Parameters */}
+                          <div>
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-emerald-400/90">
+                              <ArrowUpRight className="w-3 h-3 shrink-0" />
+                              <span>Salida (OUT: {outParams.length})</span>
+                            </div>
+                            {outParams.length === 0 ? (
+                              <div className="text-[10px] text-zinc-500 italic pl-5 py-0.5">
+                                Sin parámetros de salida
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5 mt-0.5">
+                                {outParams.map((param) => (
+                                  <div
+                                    key={`out-${param.name}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyToClipboard(param.name);
+                                    }}
+                                    title={`Parámetro de salida: ${param.name} (${param.type}) — Clic para copiar`}
+                                    className="flex items-center justify-between gap-2 pl-4 pr-1.5 py-0.5 rounded hover:bg-zinc-800/70 cursor-pointer text-[11px] group/param transition-colors"
+                                  >
+                                    <span className="font-mono truncate text-zinc-300 group-hover/param:text-emerald-200">
+                                      {param.name}
+                                    </span>
+                                    {param.type && (
+                                      <span className="text-[9.5px] font-mono text-emerald-300/90 bg-emerald-950/40 border border-emerald-800/40 px-1.5 py-0.2 rounded shrink-0">
+                                        {formatCompactType(param.type)}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -604,44 +897,94 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
           </div>
 
           {!collapsedSections.triggers && (
-            <div className="ml-4 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
+            <div className="ml-3 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
               {filteredTriggers.length === 0 ? (
                 <div className="text-[11px] text-zinc-500 py-1 pl-2 italic">Sin triggers</div>
               ) : (
-                filteredTriggers.map((trig) => (
-                  <div
-                    key={trig.name}
-                    onContextMenu={(e) => openContextMenu(e, 'TRIGGER', trig.name, trig)}
-                    className="group flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-yellow-300 transition-colors"
-                  >
-                    <div
-                      className="flex items-center gap-2 min-w-0 flex-1 truncate"
-                      onClick={() => onEditObject('TRIGGER', trig.name)}
-                      title={`Clic: editar trigger | Clic derecho: menú contextual`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${trig.inactive ? 'bg-zinc-600' : 'bg-yellow-500'} shrink-0`} />
-                      <span className="truncate font-mono text-[11.5px]">{trig.name}</span>
-                    </div>
+                filteredTriggers.map((trig) => {
+                  const objKey = `trig:${trig.name}`;
+                  const isExpanded = Boolean(expandedObjects[objKey]);
 
-                    <div className="flex items-center gap-1">
-                      {trig.table && (
-                        <span className="text-[9px] text-zinc-500 font-mono truncate max-w-[80px] group-hover:hidden">
-                          {trig.table}
-                        </span>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEditObject('TRIGGER', trig.name);
-                        }}
-                        title="Editar / Ver Código (DDL)"
-                        className="hidden group-hover:block p-1 hover:bg-zinc-700 text-zinc-400 hover:text-yellow-300 rounded"
+                  return (
+                    <div key={trig.name} className="space-y-0.5">
+                      <div
+                        onContextMenu={(e) => openContextMenu(e, 'TRIGGER', trig.name, trig)}
+                        className="group flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-yellow-300 transition-colors"
                       >
-                        <Code className="w-3 h-3" />
-                      </button>
+                        <div className="flex items-center gap-1 min-w-0 flex-1 truncate">
+                          <button
+                            type="button"
+                            onClick={(e) => toggleObjectExpand(e, objKey)}
+                            title={isExpanded ? 'Ocultar detalle' : 'Mostrar detalle del trigger'}
+                            className="p-0.5 rounded hover:bg-zinc-700/80 text-zinc-500 hover:text-yellow-400 transition-colors shrink-0"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-3 h-3 text-yellow-400" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3" />
+                            )}
+                          </button>
+
+                          <div
+                            className="flex items-center gap-1.5 min-w-0 flex-1 truncate"
+                            onClick={() => onEditObject('TRIGGER', trig.name)}
+                            title="Clic: editar trigger | Flecha: ver detalle | Clic derecho: menú"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${trig.inactive ? 'bg-zinc-600' : 'bg-yellow-500'} shrink-0`} />
+                            <span className="truncate font-mono text-[11.5px]">{trig.name}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {trig.table && (
+                            <span className="text-[9px] text-zinc-500 font-mono truncate max-w-[80px] group-hover:hidden">
+                              {trig.table}
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditObject('TRIGGER', trig.name);
+                            }}
+                            title="Editar / Ver Código (DDL)"
+                            className="hidden group-hover:block p-1 hover:bg-zinc-700 text-zinc-400 hover:text-yellow-300 rounded"
+                          >
+                            <Code className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="ml-3.5 pl-2 border-l border-yellow-500/25 py-1 px-2 space-y-1 bg-zinc-950/35 rounded-r-md text-[10.5px]">
+                          {trig.table && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-zinc-500">Tabla:</span>
+                              <span className="font-mono text-zinc-200 truncate">{trig.table}</span>
+                            </div>
+                          )}
+                          {trig.event && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-zinc-500">Evento:</span>
+                              <span className="font-mono text-[9.5px] bg-yellow-950/40 text-yellow-300 border border-yellow-800/40 px-1.5 py-0.2 rounded">
+                                {trig.event}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-zinc-500">Estado:</span>
+                            <span className={`text-[9.5px] font-medium px-1.5 py-0.2 rounded ${
+                              trig.inactive
+                                ? 'bg-zinc-800 text-zinc-400'
+                                : 'bg-emerald-950/50 text-emerald-300 border border-emerald-800/40'
+                            }`}>
+                              {trig.inactive ? 'Inactivo' : `Activo (Pos. ${trig.sequence ?? 0})`}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -679,7 +1022,7 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
                     onContextMenu={(e) => openContextMenu(e, 'GENERATOR', gen)}
                     onClick={() => onSelectObjectSql(`SELECT GEN_ID(${gen}, 0) AS VALOR_ACTUAL FROM RDB$DATABASE;`, true)}
                     className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-purple-300 transition-colors"
-                    title={`Clic: consultar valor actual | Clic derecho: opciones`}
+                    title="Clic: consultar valor actual | Clic derecho: opciones"
                   >
                     <div className="flex items-center gap-2 min-w-0 truncate">
                       <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
@@ -717,19 +1060,31 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
               {filteredDomains.length === 0 ? (
                 <div className="text-[11px] text-zinc-500 py-1 pl-2 italic">Sin dominios personalizados</div>
               ) : (
-                filteredDomains.map((domain) => (
-                  <div
-                    key={domain}
-                    onContextMenu={(e) => openContextMenu(e, 'DOMAIN', domain)}
-                    className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-pink-300 transition-colors"
-                    title={`Clic derecho: opciones`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0 truncate">
-                      <span className="w-1.5 h-1.5 rounded-full bg-pink-500 shrink-0" />
-                      <span className="truncate font-mono text-[11.5px]">{domain}</span>
+                filteredDomains.map((domain) => {
+                  const detail = objects?.domainDetails?.[domain];
+                  return (
+                    <div
+                      key={domain}
+                      onContextMenu={(e) => openContextMenu(e, 'DOMAIN', domain)}
+                      onClick={() => copyToClipboard(domain)}
+                      className="flex items-center justify-between gap-2 py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-pink-300 transition-colors"
+                      title={detail ? `${domain}: ${detail.type}${detail.notNull ? ' NOT NULL' : ''} — Clic para copiar` : 'Clic derecho: opciones'}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 truncate">
+                        <span className="w-1.5 h-1.5 rounded-full bg-pink-500 shrink-0" />
+                        <span className="truncate font-mono text-[11.5px]">{domain}</span>
+                        {detail?.notNull && (
+                          <span className="text-[9px] text-pink-400 font-bold shrink-0" title="NOT NULL">*</span>
+                        )}
+                      </div>
+                      {detail?.type && (
+                        <span className="text-[9.5px] font-mono text-pink-300/80 bg-zinc-950/80 border border-zinc-800 px-1.5 py-0.2 rounded shrink-0">
+                          {formatCompactType(detail.type)}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -756,23 +1111,43 @@ export const ObjectTree: React.FC<ObjectTreeProps> = ({
           </div>
 
           {!collapsedSections.exceptions && (
-            <div className="ml-4 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
+            <div className="ml-3 pl-1.5 border-l border-zinc-800 space-y-0.5 mt-0.5">
               {filteredExceptions.length === 0 ? (
                 <div className="text-[11px] text-zinc-500 py-1 pl-2 italic">Sin excepciones</div>
               ) : (
-                filteredExceptions.map((ex) => (
-                  <div
-                    key={ex}
-                    onContextMenu={(e) => openContextMenu(e, 'EXCEPTION', ex)}
-                    className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-rose-300 transition-colors"
-                    title={`Clic derecho: opciones`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0 truncate">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                      <span className="truncate font-mono text-[11.5px]">{ex}</span>
+                filteredExceptions.map((ex) => {
+                  const objKey = `ex:${ex}`;
+                  const isExpanded = Boolean(expandedObjects[objKey]);
+                  const msg = objects?.exceptionDetails?.[ex];
+
+                  return (
+                    <div key={ex} className="space-y-0.5">
+                      <div
+                        onContextMenu={(e) => openContextMenu(e, 'EXCEPTION', ex)}
+                        onClick={(e) => toggleObjectExpand(e, objKey)}
+                        className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800 cursor-pointer text-zinc-300 hover:text-rose-300 transition-colors"
+                        title={msg ? `Mensaje: "${msg}" — Clic para ver/ocultar` : 'Clic derecho: opciones'}
+                      >
+                        <div className="flex items-center gap-1 min-w-0 truncate">
+                          <span className="p-0.5 text-zinc-500 shrink-0">
+                            {isExpanded ? (
+                              <ChevronDown className="w-3 h-3 text-rose-400" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3" />
+                            )}
+                          </span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                          <span className="truncate font-mono text-[11.5px]">{ex}</span>
+                        </div>
+                      </div>
+                      {isExpanded && msg && (
+                        <div className="ml-3.5 pl-2 border-l border-rose-500/25 py-1 px-2 bg-zinc-950/35 rounded-r-md text-[10.5px] text-rose-200/80 italic break-words">
+                          "{msg}"
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}

@@ -11,10 +11,10 @@ permissions:
 
 jobs:
   # ─────────────────────────────────────────────
-  # Windows portable .exe
+  # Windows Setup (NSIS) & Portable .exe
   # ─────────────────────────────────────────────
   build-windows:
-    name: Build Windows (portable .exe)
+    name: Build Windows (Setup & Portable .exe)
     runs-on: windows-latest
 
     steps:
@@ -27,19 +27,26 @@ jobs:
           node-version: 24
           cache: 'npm'
 
+      - name: Sync version with git tag (if tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          npm version "$TAG_VER" --no-git-tag-version --allow-same-version
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build
         run: npm run build
 
-      - name: Package Windows Portable
-        run: npx electron-builder --win portable --publish never
+      - name: Package Windows (Portable & NSIS Setup)
+        run: npx electron-builder --win portable nsis --publish never
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
-          name: windows-portable
+          name: windows-binaries
           path: release/*.exe
           retention-days: 7
 
@@ -59,6 +66,12 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
+
+      - name: Sync version with git tag (if tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          npm version "$TAG_VER" --no-git-tag-version --allow-same-version
 
       - name: Install system dependencies
         run: |
@@ -102,7 +115,7 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v5
         with:
-          name: windows-portable
+          name: windows-binaries
           path: release/
 
       - name: Download Linux artifact
@@ -129,7 +142,8 @@ jobs:
             ### Downloads
             | Platform | File |
             |---|---|
-            | **Windows** | `FirebirdYog-*-portable-x64.exe` — no installation required |
+            | **Windows (Installer)** | `FirebirdYog-*-Setup-x64.exe` — standard setup wizard |
+            | **Windows (Portable)** | `FirebirdYog-*-portable-x64.exe` — no installation required |
             | **Linux** | `FirebirdYog-*-x86_64.AppImage` — run `chmod +x` then execute |
 
             ### What's Changed

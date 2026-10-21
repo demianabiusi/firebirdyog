@@ -3,8 +3,8 @@ import type FirebirdType from 'node-firebird';
 import { SshTunnelConfig, SshTunnelInstance, sshTunnelService } from './ssh-tunnel-service';
 
 // Resolve CommonJS / ESM interop for node-firebird
-const Firebird: typeof FirebirdType = ((FirebirdRaw as any).attach 
-  ? FirebirdRaw 
+const Firebird: typeof FirebirdType = ((FirebirdRaw as any).attach
+  ? FirebirdRaw
   : ((FirebirdRaw as any).default || FirebirdRaw)) as any;
 
 export interface FirebirdConnectionOptions {
@@ -722,12 +722,28 @@ export class FirebirdService {
   public async getSchemaObjects(): Promise<{
     tables: string[];
     views: string[];
-    procedures: { name: string; inputs: number; outputs: number; inputParams?: string[] }[];
-    triggers: { name: string; table: string; inactive: boolean }[];
+    procedures: {
+      name: string;
+      inputs: number;
+      outputs: number;
+      inputParams?: string[];
+      inputParamDetails?: { name: string; type: string }[];
+      outputParamDetails?: { name: string; type: string }[];
+    }[];
+    triggers: {
+      name: string;
+      table: string;
+      inactive: boolean;
+      event?: string;
+      sequence?: number;
+    }[];
     generators: string[];
     domains: string[];
     exceptions: string[];
     columnsByTable?: Record<string, string[]>;
+    tableColumnDetails?: Record<string, { name: string; type: string; notNull: boolean; isPk: boolean }[]>;
+    domainDetails?: Record<string, { type: string; notNull: boolean }>;
+    exceptionDetails?: Record<string, string>;
   }> {
     if (!this.activeDb) {
       throw new Error('No hay conexión activa a la base de datos.');
@@ -750,7 +766,7 @@ export class FirebirdService {
     `;
 
     const proceduresQuery = `
-      SELECT 
+      SELECT
         TRIM(RDB$PROCEDURE_NAME) AS NAME,
         COALESCE(RDB$PROCEDURE_INPUTS, 0) AS INPUTS,
         COALESCE(RDB$PROCEDURE_OUTPUTS, 0) AS OUTPUTS
@@ -760,20 +776,28 @@ export class FirebirdService {
     `;
 
     const procParamsQuery = `
-      SELECT 
-        TRIM(RDB$PROCEDURE_NAME) AS PROC_NAME,
-        TRIM(RDB$PARAMETER_NAME) AS PARAM_NAME,
-        COALESCE(RDB$PARAMETER_NUMBER, 0) AS PARAM_NUM
-      FROM RDB$PROCEDURE_PARAMETERS
-      WHERE RDB$PARAMETER_TYPE = 0
-      ORDER BY RDB$PROCEDURE_NAME, RDB$PARAMETER_NUMBER
+      SELECT
+        TRIM(PP.RDB$PROCEDURE_NAME) AS PROC_NAME,
+        TRIM(PP.RDB$PARAMETER_NAME) AS PARAM_NAME,
+        COALESCE(PP.RDB$PARAMETER_TYPE, 0) AS PARAM_TYPE,
+        COALESCE(PP.RDB$PARAMETER_NUMBER, 0) AS PARAM_NUM,
+        F.RDB$FIELD_TYPE AS FIELD_TYPE_CODE,
+        F.RDB$FIELD_SUB_TYPE AS FIELD_SUB_TYPE,
+        COALESCE(F.RDB$CHARACTER_LENGTH, F.RDB$FIELD_LENGTH) AS FIELD_LENGTH,
+        F.RDB$FIELD_PRECISION AS FIELD_PRECISION,
+        F.RDB$FIELD_SCALE AS FIELD_SCALE
+      FROM RDB$PROCEDURE_PARAMETERS PP
+      LEFT JOIN RDB$FIELDS F ON PP.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+      ORDER BY PP.RDB$PROCEDURE_NAME, PP.RDB$PARAMETER_TYPE, PP.RDB$PARAMETER_NUMBER
     `;
 
     const triggersQuery = `
-      SELECT 
+      SELECT
         TRIM(RDB$TRIGGER_NAME) AS NAME,
         TRIM(RDB$RELATION_NAME) AS TABLE_NAME,
-        COALESCE(RDB$TRIGGER_INACTIVE, 0) AS INACTIVE
+        COALESCE(RDB$TRIGGER_INACTIVE, 0) AS INACTIVE,
+        COALESCE(RDB$TRIGGER_TYPE, 1) AS TRIG_TYPE,
+        COALESCE(RDB$TRIGGER_SEQUENCE, 0) AS SEQ
       FROM RDB$TRIGGERS
       WHERE (RDB$SYSTEM_FLAG = 0 OR RDB$SYSTEM_FLAG IS NULL)
       ORDER BY 1
@@ -787,7 +811,14 @@ export class FirebirdService {
     `;
 
     const domainsQuery = `
-      SELECT TRIM(RDB$FIELD_NAME) AS NAME
+      SELECT
+        TRIM(RDB$FIELD_NAME) AS NAME,
+        RDB$FIELD_TYPE AS FIELD_TYPE_CODE,
+        RDB$FIELD_SUB_TYPE AS FIELD_SUB_TYPE,
+        COALESCE(RDB$CHARACTER_LENGTH, RDB$FIELD_LENGTH) AS FIELD_LENGTH,
+        RDB$FIELD_PRECISION AS FIELD_PRECISION,
+        RDB$FIELD_SCALE AS FIELD_SCALE,
+        COALESCE(RDB$NULL_FLAG, 0) AS NULL_FLAG
       FROM RDB$FIELDS
       WHERE (RDB$SYSTEM_FLAG = 0 OR RDB$SYSTEM_FLAG IS NULL)
         AND RDB$FIELD_NAME NOT STARTING WITH 'RDB$'
@@ -795,20 +826,38 @@ export class FirebirdService {
     `;
 
     const exceptionsQuery = `
-      SELECT TRIM(RDB$EXCEPTION_NAME) AS NAME
+      SELECT
+        TRIM(RDB$EXCEPTION_NAME) AS NAME,
+        TRIM(RDB$MESSAGE) AS MSG
       FROM RDB$EXCEPTIONS
       WHERE (RDB$SYSTEM_FLAG = 0 OR RDB$SYSTEM_FLAG IS NULL)
       ORDER BY 1
     `;
 
     const columnsQuery = `
-      SELECT 
+      SELECT
         TRIM(RF.RDB$RELATION_NAME) AS TABLE_NAME,
-        TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME
+        TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME,
+        F.RDB$FIELD_TYPE AS FIELD_TYPE_CODE,
+        F.RDB$FIELD_SUB_TYPE AS FIELD_SUB_TYPE,
+        COALESCE(F.RDB$CHARACTER_LENGTH, F.RDB$FIELD_LENGTH) AS FIELD_LENGTH,
+        F.RDB$FIELD_PRECISION AS FIELD_PRECISION,
+        F.RDB$FIELD_SCALE AS FIELD_SCALE,
+        COALESCE(RF.RDB$NULL_FLAG, F.RDB$NULL_FLAG, 0) AS NULL_FLAG
       FROM RDB$RELATION_FIELDS RF
       JOIN RDB$RELATIONS R ON R.RDB$RELATION_NAME = RF.RDB$RELATION_NAME
+      LEFT JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
       WHERE (R.RDB$SYSTEM_FLAG = 0 OR R.RDB$SYSTEM_FLAG IS NULL)
       ORDER BY RF.RDB$RELATION_NAME, RF.RDB$FIELD_POSITION
+    `;
+
+    const pkColumnsQuery = `
+      SELECT
+        TRIM(RC.RDB$RELATION_NAME) AS TABLE_NAME,
+        TRIM(ISG.RDB$FIELD_NAME) AS COLUMN_NAME
+      FROM RDB$RELATION_CONSTRAINTS RC
+      JOIN RDB$INDEX_SEGMENTS ISG ON ISG.RDB$INDEX_NAME = RC.RDB$INDEX_NAME
+      WHERE RC.RDB$CONSTRAINT_TYPE = 'PRIMARY KEY'
     `;
 
     const queryAsync = (sql: string): Promise<any[]> => {
@@ -821,7 +870,7 @@ export class FirebirdService {
     };
 
     try {
-      const [tables, views, procs, procParams, triggers, gens, domains, exceptions, colRows] = await Promise.all([
+      const [tables, views, procs, procParams, triggers, gens, domains, exceptions, colRows, pkRows] = await Promise.all([
         queryAsync(tablesQuery),
         queryAsync(viewsQuery),
         queryAsync(proceduresQuery),
@@ -830,20 +879,51 @@ export class FirebirdService {
         queryAsync(generatorsQuery),
         queryAsync(domainsQuery),
         queryAsync(exceptionsQuery),
-        queryAsync(columnsQuery)
+        queryAsync(columnsQuery),
+        queryAsync(pkColumnsQuery)
       ]);
 
+      const pkSet = new Set<string>();
+      for (const row of pkRows) {
+        const tbl = this.extractString(row, 'TABLE_NAME', 'RDB$RELATION_NAME');
+        const col = this.extractString(row, 'COLUMN_NAME', 'RDB$FIELD_NAME');
+        if (tbl && col) {
+          pkSet.add(`${tbl}.${col}`);
+        }
+      }
+
       const paramsByProc: Record<string, string[]> = {};
+      const inDetailsByProc: Record<string, { name: string; type: string }[]> = {};
+      const outDetailsByProc: Record<string, { name: string; type: string }[]> = {};
+
       for (const row of procParams) {
         const procName = this.extractString(row, 'PROC_NAME', 'RDB$PROCEDURE_NAME');
         const paramName = this.extractString(row, 'PARAM_NAME', 'RDB$PARAMETER_NAME');
+        const paramType = this.extractNumber(row, 'PARAM_TYPE', 'RDB$PARAMETER_TYPE');
         if (procName && paramName) {
-          if (!paramsByProc[procName]) paramsByProc[procName] = [];
-          paramsByProc[procName].push(paramName);
+          const typeStr = this.resolveFieldType(
+            this.extractNumber(row, 'FIELD_TYPE_CODE', 'RDB$FIELD_TYPE'),
+            this.extractNumber(row, 'FIELD_SUB_TYPE', 'RDB$FIELD_SUB_TYPE'),
+            this.extractNumber(row, 'FIELD_LENGTH', 'RDB$FIELD_LENGTH'),
+            this.extractNumber(row, 'FIELD_PRECISION', 'RDB$FIELD_PRECISION'),
+            this.extractNumber(row, 'FIELD_SCALE', 'RDB$FIELD_SCALE')
+          );
+
+          if (paramType === 0) {
+            if (!paramsByProc[procName]) paramsByProc[procName] = [];
+            paramsByProc[procName].push(paramName);
+            if (!inDetailsByProc[procName]) inDetailsByProc[procName] = [];
+            inDetailsByProc[procName].push({ name: paramName, type: typeStr });
+          } else {
+            if (!outDetailsByProc[procName]) outDetailsByProc[procName] = [];
+            outDetailsByProc[procName].push({ name: paramName, type: typeStr });
+          }
         }
       }
 
       const columnsByTable: Record<string, string[]> = {};
+      const tableColumnDetails: Record<string, { name: string; type: string; notNull: boolean; isPk: boolean }[]> = {};
+
       for (const row of colRows) {
         const tbl = this.extractString(row, 'TABLE_NAME', 'RDB$RELATION_NAME');
         const col = this.extractString(row, 'COLUMN_NAME', 'RDB$FIELD_NAME');
@@ -852,6 +932,51 @@ export class FirebirdService {
             columnsByTable[tbl] = [];
           }
           columnsByTable[tbl].push(col);
+
+          const typeStr = this.resolveFieldType(
+            this.extractNumber(row, 'FIELD_TYPE_CODE', 'RDB$FIELD_TYPE'),
+            this.extractNumber(row, 'FIELD_SUB_TYPE', 'RDB$FIELD_SUB_TYPE'),
+            this.extractNumber(row, 'FIELD_LENGTH', 'RDB$FIELD_LENGTH'),
+            this.extractNumber(row, 'FIELD_PRECISION', 'RDB$FIELD_PRECISION'),
+            this.extractNumber(row, 'FIELD_SCALE', 'RDB$FIELD_SCALE')
+          );
+          const notNull = this.extractNumber(row, 'NULL_FLAG', 'RDB$NULL_FLAG') === 1;
+          const isPk = pkSet.has(`${tbl}.${col}`);
+
+          if (!tableColumnDetails[tbl]) {
+            tableColumnDetails[tbl] = [];
+          }
+          tableColumnDetails[tbl].push({
+            name: col,
+            type: typeStr,
+            notNull,
+            isPk
+          });
+        }
+      }
+
+      const domainDetails: Record<string, { type: string; notNull: boolean }> = {};
+      for (const row of domains) {
+        const domName = this.extractString(row, 'NAME', 'RDB$FIELD_NAME');
+        if (domName) {
+          const typeStr = this.resolveFieldType(
+            this.extractNumber(row, 'FIELD_TYPE_CODE', 'RDB$FIELD_TYPE'),
+            this.extractNumber(row, 'FIELD_SUB_TYPE', 'RDB$FIELD_SUB_TYPE'),
+            this.extractNumber(row, 'FIELD_LENGTH', 'RDB$FIELD_LENGTH'),
+            this.extractNumber(row, 'FIELD_PRECISION', 'RDB$FIELD_PRECISION'),
+            this.extractNumber(row, 'FIELD_SCALE', 'RDB$FIELD_SCALE')
+          );
+          const notNull = this.extractNumber(row, 'NULL_FLAG', 'RDB$NULL_FLAG') === 1;
+          domainDetails[domName] = { type: typeStr, notNull };
+        }
+      }
+
+      const exceptionDetails: Record<string, string> = {};
+      for (const row of exceptions) {
+        const exName = this.extractString(row, 'NAME', 'RDB$EXCEPTION_NAME');
+        const msg = this.extractString(row, 'MSG', 'RDB$MESSAGE');
+        if (exName) {
+          exceptionDetails[exName] = msg;
         }
       }
 
@@ -864,18 +989,28 @@ export class FirebirdService {
             name,
             inputs: this.extractNumber(r, 'INPUTS', 'RDB$PROCEDURE_INPUTS'),
             outputs: this.extractNumber(r, 'OUTPUTS', 'RDB$PROCEDURE_OUTPUTS'),
-            inputParams: paramsByProc[name] || []
+            inputParams: paramsByProc[name] || [],
+            inputParamDetails: inDetailsByProc[name] || [],
+            outputParamDetails: outDetailsByProc[name] || []
           };
         }).filter(p => Boolean(p.name)),
-        triggers: triggers.map(r => ({
-          name: this.extractString(r, 'NAME', 'RDB$TRIGGER_NAME'),
-          table: this.extractString(r, 'TABLE_NAME', 'RDB$RELATION_NAME'),
-          inactive: this.extractNumber(r, 'INACTIVE', 'RDB$TRIGGER_INACTIVE') === 1
-        })).filter(t => Boolean(t.name)),
+        triggers: triggers.map(r => {
+          const trigType = this.extractNumber(r, 'TRIG_TYPE', 'RDB$TRIGGER_TYPE');
+          return {
+            name: this.extractString(r, 'NAME', 'RDB$TRIGGER_NAME'),
+            table: this.extractString(r, 'TABLE_NAME', 'RDB$RELATION_NAME'),
+            inactive: this.extractNumber(r, 'INACTIVE', 'RDB$TRIGGER_INACTIVE') === 1,
+            event: this.decodeTriggerType(trigType || 1),
+            sequence: this.extractNumber(r, 'SEQ', 'RDB$TRIGGER_SEQUENCE')
+          };
+        }).filter(t => Boolean(t.name)),
         generators: gens.map(r => this.extractString(r, 'NAME', 'RDB$GENERATOR_NAME')).filter(Boolean),
         domains: domains.map(r => this.extractString(r, 'NAME', 'RDB$FIELD_NAME')).filter(Boolean),
         exceptions: exceptions.map(r => this.extractString(r, 'NAME', 'RDB$EXCEPTION_NAME')).filter(Boolean),
-        columnsByTable
+        columnsByTable,
+        tableColumnDetails,
+        domainDetails,
+        exceptionDetails
       };
     } catch (err: any) {
       throw new Error(`Error al consultar metadatos de Firebird: ${err.message}`);
@@ -948,7 +1083,7 @@ export class FirebirdService {
     if (typeUpper === 'PROCEDURE') {
       // 1. Fetch Procedure Source & Header
       const procQuery = `
-        SELECT 
+        SELECT
           TRIM(P.RDB$PROCEDURE_NAME) AS NAME,
           P.RDB$PROCEDURE_SOURCE AS SOURCE,
           COALESCE(P.RDB$PROCEDURE_INPUTS, 0) AS INPUTS,
@@ -959,7 +1094,7 @@ export class FirebirdService {
 
       // 2. Fetch Parameters
       const paramQuery = `
-        SELECT 
+        SELECT
           TRIM(PP.RDB$PARAMETER_NAME) AS PARAM_NAME,
           PP.RDB$PARAMETER_TYPE AS PARAM_TYPE,
           PP.RDB$PARAMETER_NUMBER AS PARAM_NUM,
@@ -1020,7 +1155,7 @@ export class FirebirdService {
         ddl += `\nRETURNS (\n${outParams.join(',\n')}\n)`;
       }
       ddl += `\nAS\n`;
-      
+
       const body = source.trim();
       if (body.toUpperCase().startsWith('BEGIN')) {
         ddl += body;
@@ -1029,7 +1164,7 @@ export class FirebirdService {
       } else {
         ddl += `BEGIN\n  ${body}\nEND`;
       }
-      
+
       ddl += `\n`;
 
       return { ddl, name: cleanName, type: 'PROCEDURE' };
@@ -1037,7 +1172,7 @@ export class FirebirdService {
 
     if (typeUpper === 'TRIGGER') {
       const triggerQuery = `
-        SELECT 
+        SELECT
           TRIM(T.RDB$TRIGGER_NAME) AS NAME,
           TRIM(T.RDB$RELATION_NAME) AS TABLE_NAME,
           COALESCE(T.RDB$TRIGGER_SEQUENCE, 0) AS SEQ,
@@ -1067,7 +1202,7 @@ export class FirebirdService {
 
     if (typeUpper === 'VIEW') {
       const viewQuery = `
-        SELECT 
+        SELECT
           TRIM(R.RDB$RELATION_NAME) AS NAME,
           R.RDB$VIEW_SOURCE AS SOURCE
         FROM RDB$RELATIONS R
@@ -1109,7 +1244,7 @@ export class FirebirdService {
 
     if (typeUpper === 'DOMAIN') {
       const q = `
-        SELECT 
+        SELECT
           F.RDB$FIELD_TYPE AS FIELD_TYPE_CODE,
           F.RDB$FIELD_SUB_TYPE AS FIELD_SUB_TYPE,
           F.RDB$FIELD_LENGTH AS FIELD_LENGTH,
@@ -1181,7 +1316,7 @@ export class FirebirdService {
 
     // 1. Differentiate tables vs views
     const relationsQuery = `
-      SELECT 
+      SELECT
         TRIM(RDB$RELATION_NAME) AS NAME,
         CASE WHEN RDB$VIEW_BLR IS NOT NULL THEN 'VIEW' ELSE 'TABLE' END AS TYPE
       FROM RDB$RELATIONS
@@ -1190,7 +1325,7 @@ export class FirebirdService {
 
     // 2. Query RDB$DEPENDENCIES in both directions
     const dependsOnQuery = `
-      SELECT 
+      SELECT
         TRIM(D.RDB$DEPENDED_ON_NAME) AS OBJ_NAME,
         D.RDB$DEPENDED_ON_TYPE AS TYPE_CODE,
         TRIM(D.RDB$FIELD_NAME) AS FIELD_NAME
@@ -1199,7 +1334,7 @@ export class FirebirdService {
     `;
 
     const dependedOnByQuery = `
-      SELECT 
+      SELECT
         TRIM(D.RDB$DEPENDENT_NAME) AS OBJ_NAME,
         D.RDB$DEPENDENT_TYPE AS TYPE_CODE,
         TRIM(D.RDB$FIELD_NAME) AS FIELD_NAME
@@ -1209,7 +1344,7 @@ export class FirebirdService {
 
     // 3. Foreign Keys (if table)
     const fkQuery = `
-      SELECT 
+      SELECT
         TRIM(RC.RDB$CONSTRAINT_NAME) AS CONSTRAINT_NAME,
         TRIM(RC.RDB$RELATION_NAME) AS SOURCE_TABLE,
         TRIM(RC_PK.RDB$RELATION_NAME) AS TARGET_TABLE,
@@ -1228,7 +1363,7 @@ export class FirebirdService {
 
     // 4. Domains (fields using domains)
     const domainQuery = `
-      SELECT 
+      SELECT
         TRIM(RF.RDB$RELATION_NAME) AS TABLE_NAME,
         TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME,
         TRIM(RF.RDB$FIELD_SOURCE) AS DOMAIN_NAME
@@ -1240,7 +1375,7 @@ export class FirebirdService {
 
     // 5. Triggers for table
     const tableTriggersQuery = `
-      SELECT 
+      SELECT
         TRIM(RDB$TRIGGER_NAME) AS TRIGGER_NAME,
         RDB$TRIGGER_TYPE AS TRIG_TYPE,
         COALESCE(RDB$TRIGGER_INACTIVE, 0) AS INACTIVE
@@ -1481,7 +1616,7 @@ export class FirebirdService {
     }
 
     const columnsQuery = `
-      SELECT 
+      SELECT
         TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME,
         RF.RDB$FIELD_POSITION AS FIELD_POS,
         TRIM(F.RDB$FIELD_NAME) AS DOMAIN_NAME,
@@ -1492,7 +1627,7 @@ export class FirebirdService {
         F.RDB$FIELD_SCALE AS FIELD_SCALE,
         COALESCE(RF.RDB$NULL_FLAG, F.RDB$NULL_FLAG, 0) AS NULL_FLAG,
         TRIM(RF.RDB$DEFAULT_SOURCE) AS DEFAULT_VALUE,
-        CASE 
+        CASE
           WHEN EXISTS (
             SELECT 1 FROM RDB$RELATION_CONSTRAINTS RC
             JOIN RDB$INDEX_SEGMENTS ISG ON ISG.RDB$INDEX_NAME = RC.RDB$INDEX_NAME
@@ -1507,7 +1642,7 @@ export class FirebirdService {
     `;
 
     const triggersQuery = `
-      SELECT 
+      SELECT
         TRIM(RDB$TRIGGER_NAME) AS NAME,
         RDB$TRIGGER_TYPE AS TYPE,
         COALESCE(RDB$TRIGGER_INACTIVE, 0) AS INACTIVE
@@ -1518,7 +1653,7 @@ export class FirebirdService {
     `;
 
     const indicesQuery = `
-      SELECT 
+      SELECT
         TRIM(I.RDB$INDEX_NAME) AS INDEX_NAME,
         COALESCE(I.RDB$UNIQUE_FLAG, 0) AS UNIQUE_FLAG,
         TRIM(S.RDB$FIELD_NAME) AS FIELD_NAME

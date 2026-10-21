@@ -147,12 +147,28 @@ export interface ElectronAPI {
   getSchemaObjects: () => Promise<IpcResponse<{
     tables: string[];
     views: string[];
-    procedures: { name: string; inputs: number; outputs: number; inputParams?: string[] }[];
-    triggers: { name: string; table: string; inactive: boolean }[];
+    procedures: {
+      name: string;
+      inputs: number;
+      outputs: number;
+      inputParams?: string[];
+      inputParamDetails?: { name: string; type: string }[];
+      outputParamDetails?: { name: string; type: string }[];
+    }[];
+    triggers: {
+      name: string;
+      table: string;
+      inactive: boolean;
+      event?: string;
+      sequence?: number;
+    }[];
     generators: string[];
     domains: string[];
     exceptions: string[];
     columnsByTable?: Record<string, string[]>;
+    tableColumnDetails?: Record<string, { name: string; type: string; notNull: boolean; isPk: boolean }[]>;
+    domainDetails?: Record<string, { type: string; notNull: boolean }>;
+    exceptionDetails?: Record<string, string>;
   }>>;
   getTableDetails: (tableName: string) => Promise<IpcResponse<TableDetails>>;
   getObjectDdl: (type: string, name: string) => Promise<IpcResponse<{ ddl: string; name: string; type: string }>>;
