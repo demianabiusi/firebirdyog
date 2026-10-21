@@ -296,6 +296,25 @@ export class FirebirdService {
     return val;
   }
 
+  public stripLeadingComments(sql: string): string {
+    let s = sql.trim();
+    let changed = true;
+    while (changed) {
+      changed = false;
+      s = s.trim();
+      if (s.startsWith('--')) {
+        const newlineIdx = s.indexOf('\n');
+        s = newlineIdx === -1 ? '' : s.substring(newlineIdx + 1);
+        changed = true;
+      } else if (s.startsWith('/*')) {
+        const closeIdx = s.indexOf('*/');
+        s = closeIdx === -1 ? '' : s.substring(closeIdx + 2);
+        changed = true;
+      }
+    }
+    return s.trim();
+  }
+
   public cleanSqlForExecution(sql: string): string {
     let s = sql.trim();
 
@@ -330,11 +349,16 @@ export class FirebirdService {
       throw new Error('La consulta está vacía.');
     }
 
+    const firstExecutableSql = this.stripLeadingComments(cleanedSql);
+    if (!firstExecutableSql) {
+      throw new Error('La consulta solo contiene comentarios o está vacía.');
+    }
+
     // Handle client directives / transaction statements that cannot be passed as DSQL to db.query()
-    if (/^(COMMIT|ROLLBACK)(\s+WORK)?$/i.test(cleanedSql) || /^SET\s+(TRANSACTION|AUTODDL|NAMES|SQL\s+DIALECT|HEADING|ECHO|STATS)/i.test(cleanedSql)) {
+    if (/^(COMMIT|ROLLBACK)(\s+WORK)?$/i.test(firstExecutableSql) || /^SET\s+(TRANSACTION|AUTODDL|NAMES|SQL\s+DIALECT|HEADING|ECHO|STATS)/i.test(firstExecutableSql)) {
       return {
         columns: ['RESULT'],
-        rows: [{ RESULT: `Comando ejecutado exitosamente (${cleanedSql})` }],
+        rows: [{ RESULT: `Comando ejecutado exitosamente (${firstExecutableSql})` }],
         rowCount: 1,
         affectedRows: 0,
         executionTimeMs: 0,
@@ -342,17 +366,17 @@ export class FirebirdService {
       };
     }
 
-    const isSelect = /^(SELECT|WITH|SHOW|LIST)/i.test(cleanedSql);
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
-      this.activeDb!.query(cleanedSql, [], (err, rawResult) => {
+      this.activeDb!.query(cleanedSql, [], (err, rawResult, output) => {
         const executionTimeMs = Date.now() - startTime;
         if (err) {
           return reject(err);
         }
 
-        if (!isSelect || !Array.isArray(rawResult)) {
+        // If rawResult is not an Array, it was a DML/DDL statement that did not return a rowset
+        if (!Array.isArray(rawResult)) {
           const affected = typeof rawResult === 'number' ? rawResult : 0;
           return resolve({
             columns: ['RESULT'],
@@ -371,6 +395,11 @@ export class FirebirdService {
         const columnsSet = new Set<string>();
         if (slicedRows.length > 0) {
           Object.keys(slicedRows[0]).forEach((k) => columnsSet.add(k));
+        } else if (Array.isArray(output) && output.length > 0) {
+          output.forEach((f: any) => {
+            const colName = f.alias || f.field || f.name;
+            if (colName) columnsSet.add(colName);
+          });
         }
 
         const formattedRows = slicedRows.map((row) => {
