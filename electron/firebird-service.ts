@@ -255,13 +255,29 @@ export class FirebirdService {
       return new Promise((resolve) => {
         try {
           val((err: any, _name: any, emitter: any) => {
-            if (err || !emitter) return resolve('');
+            if (err) {
+              console.warn('[readBlobValue] Error en callback de blob:', err);
+              return resolve('');
+            }
+            if (!emitter) {
+              if (Buffer.isBuffer(_name)) return resolve(_name.toString('utf-8'));
+              if (typeof _name === 'string') return resolve(_name);
+              return resolve('');
+            }
+            if (Buffer.isBuffer(emitter)) return resolve(emitter.toString('utf-8'));
+            if (typeof emitter === 'string') return resolve(emitter);
+            if (typeof emitter.on !== 'function') return resolve(String(emitter));
+
             const chunks: Buffer[] = [];
             emitter.on('data', (chunk: Buffer) => chunks.push(chunk));
             emitter.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-            emitter.on('error', () => resolve(''));
+            emitter.on('error', (blobErr: any) => {
+              console.warn('[readBlobValue] Error en stream de blob:', blobErr);
+              resolve('');
+            });
           });
-        } catch {
+        } catch (callErr) {
+          console.warn('[readBlobValue] Excepción al ejecutar función de blob:', callErr);
           resolve('');
         }
       });
@@ -1195,7 +1211,7 @@ export class FirebirdService {
           COALESCE(P.RDB$PROCEDURE_INPUTS, 0) AS INPUTS,
           COALESCE(P.RDB$PROCEDURE_OUTPUTS, 0) AS OUTPUTS
         FROM RDB$PROCEDURES P
-        WHERE TRIM(P.RDB$PROCEDURE_NAME) = ?
+        WHERE TRIM(P.RDB$PROCEDURE_NAME) = ? OR UPPER(TRIM(P.RDB$PROCEDURE_NAME)) = ?
       `;
 
       // 2. Fetch Parameters
@@ -1206,26 +1222,31 @@ export class FirebirdService {
           PP.RDB$PARAMETER_NUMBER AS PARAM_NUM,
           F.RDB$FIELD_TYPE AS FIELD_TYPE_CODE,
           F.RDB$FIELD_SUB_TYPE AS FIELD_SUB_TYPE,
-          F.RDB$FIELD_LENGTH AS FIELD_LENGTH,
+          COALESCE(F.RDB$CHARACTER_LENGTH, F.RDB$FIELD_LENGTH) AS FIELD_LENGTH,
           F.RDB$FIELD_PRECISION AS FIELD_PRECISION,
           F.RDB$FIELD_SCALE AS FIELD_SCALE
         FROM RDB$PROCEDURE_PARAMETERS PP
-        JOIN RDB$FIELDS F ON PP.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
-        WHERE TRIM(PP.RDB$PROCEDURE_NAME) = ?
+        LEFT JOIN RDB$FIELDS F ON PP.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+        WHERE TRIM(PP.RDB$PROCEDURE_NAME) = ? OR UPPER(TRIM(PP.RDB$PROCEDURE_NAME)) = ?
         ORDER BY PP.RDB$PARAMETER_TYPE, PP.RDB$PARAMETER_NUMBER
       `;
 
-      const [procRows, paramRows] = await Promise.all([
-        queryParamsAsync(procQuery, [cleanName]),
-        queryParamsAsync(paramQuery, [cleanName])
-      ]);
+      // Run sequentially to prevent socket/transaction collision on node-firebird
+      const procRows = await queryParamsAsync(procQuery, [objectName.trim(), cleanName]);
+      const paramRows = await queryParamsAsync(paramQuery, [objectName.trim(), cleanName]);
 
       if (procRows.length === 0) {
         throw new Error(`No se encontró el procedimiento '${cleanName}'.`);
       }
 
-      const proc = procRows[0];
-      const source = await this.readBlobValue(proc.SOURCE);
+      // Pick the row with non-empty source if multiple rows match (e.g. packaged vs standalone)
+      const proc = procRows.find((r: any) => {
+        const val = r.SOURCE ?? r.source ?? r.RDB$PROCEDURE_SOURCE ?? r['rdb$procedure_source'];
+        return val !== null && val !== undefined && val !== '';
+      }) || procRows[0];
+
+      const rawSource = proc.SOURCE ?? proc.source ?? proc.RDB$PROCEDURE_SOURCE ?? proc['rdb$procedure_source'] ?? Object.entries(proc).find(([k]) => k.toUpperCase().includes('SOURCE'))?.[1];
+      const source = await this.readBlobValue(rawSource);
 
       const inParams = paramRows
         .filter(p => Number(p.PARAM_TYPE) === 0)
@@ -1263,12 +1284,15 @@ export class FirebirdService {
       ddl += `\nAS\n`;
 
       const body = source.trim();
-      if (body.toUpperCase().startsWith('BEGIN')) {
-        ddl += body;
-      } else if (body.toUpperCase().startsWith('DECLARE') || body.toUpperCase().startsWith('VARIABLE')) {
-        ddl += body;
+      if (!body) {
+        ddl += `BEGIN\n  /* Código fuente no disponible (RDB$PROCEDURE_SOURCE es NULL) */\n  SUSPEND;\nEND`;
       } else {
-        ddl += `BEGIN\n  ${body}\nEND`;
+        const stripped = this.stripLeadingComments(body);
+        if (/^(BEGIN|DECLARE|VARIABLE)\b/i.test(stripped)) {
+          ddl += body;
+        } else {
+          ddl += `BEGIN\n  ${body}\nEND`;
+        }
       }
 
       ddl += `\n`;
@@ -1286,16 +1310,17 @@ export class FirebirdService {
           COALESCE(T.RDB$TRIGGER_INACTIVE, 0) AS INACTIVE,
           T.RDB$TRIGGER_SOURCE AS SOURCE
         FROM RDB$TRIGGERS T
-        WHERE TRIM(T.RDB$TRIGGER_NAME) = ?
+        WHERE TRIM(T.RDB$TRIGGER_NAME) = ? OR UPPER(TRIM(T.RDB$TRIGGER_NAME)) = ?
       `;
 
-      const rows = await queryParamsAsync(triggerQuery, [cleanName]);
+      const rows = await queryParamsAsync(triggerQuery, [objectName.trim(), cleanName]);
       if (rows.length === 0) {
         throw new Error(`No se encontró el trigger '${cleanName}'.`);
       }
 
       const trig = rows[0];
-      const source = await this.readBlobValue(trig.SOURCE);
+      const rawSource = trig.SOURCE ?? trig.source ?? trig.RDB$TRIGGER_SOURCE ?? trig['rdb$trigger_source'] ?? Object.entries(trig).find(([k]) => k.toUpperCase().includes('SOURCE'))?.[1];
+      const source = await this.readBlobValue(rawSource);
       const status = Number(trig.INACTIVE) === 1 ? 'INACTIVE' : 'ACTIVE';
       const eventType = this.decodeTriggerType(Number(trig.TRIG_TYPE) || 1);
 
@@ -1312,16 +1337,17 @@ export class FirebirdService {
           TRIM(R.RDB$RELATION_NAME) AS NAME,
           R.RDB$VIEW_SOURCE AS SOURCE
         FROM RDB$RELATIONS R
-        WHERE TRIM(R.RDB$RELATION_NAME) = ?
+        WHERE TRIM(R.RDB$RELATION_NAME) = ? OR UPPER(TRIM(R.RDB$RELATION_NAME)) = ?
       `;
 
-      const rows = await queryParamsAsync(viewQuery, [cleanName]);
+      const rows = await queryParamsAsync(viewQuery, [objectName.trim(), cleanName]);
       if (rows.length === 0) {
         throw new Error(`No se encontró la vista '${cleanName}'.`);
       }
 
       const view = rows[0];
-      const source = await this.readBlobValue(view.SOURCE);
+      const rawSource = view.SOURCE ?? view.source ?? view.RDB$VIEW_SOURCE ?? view['rdb$view_source'] ?? Object.entries(view).find(([k]) => k.toUpperCase().includes('SOURCE'))?.[1];
+      const source = await this.readBlobValue(rawSource);
 
       let ddl = `CREATE OR ALTER VIEW ${cleanName} AS\n${source.trim()};\n`;
       return { ddl, name: cleanName, type: 'VIEW' };

@@ -81,19 +81,28 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
     }
   }, [acceptOnEnter]);
 
+  const getTabUri = (id: string) => `inmemory://model/tab_${encodeURIComponent(id)}.sql`;
+
   // Clean up disposed tab models when tabs are closed
   useEffect(() => {
     if (monacoRef.current && openTabIds && openTabIds.length > 0) {
-      const activeUris = new Set(openTabIds.map((id) => `inmemory://tab_${id}.sql`));
+      const activeUriSet = new Set(openTabIds.map((id) => getTabUri(id).toLowerCase()));
+      if (tabId) {
+        activeUriSet.add(getTabUri(tabId).toLowerCase());
+      }
       const models = monacoRef.current.editor?.getModels?.() || [];
       for (const m of models) {
         const uri = m.uri?.toString?.() || '';
-        if (uri.startsWith('inmemory://tab_') && !activeUris.has(uri)) {
+        const uriLower = uri.toLowerCase();
+        if (
+          (uriLower.startsWith('inmemory://model/tab_') || uriLower.startsWith('inmemory://tab_')) &&
+          !activeUriSet.has(uriLower)
+        ) {
           m.dispose();
         }
       }
     }
-  }, [openTabIds]);
+  }, [openTabIds, tabId]);
 
   const completionDisposableRef = useRef<any>(null);
   const formattingDisposablesRef = useRef<any[]>([]);
@@ -628,7 +637,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
           defaultLanguage="sql"
           theme={monacoTheme}
           beforeMount={(monaco) => registerMonacoThemes(monaco)}
-          path={tabId ? `inmemory://tab_${tabId}.sql` : undefined}
+          path={tabId ? getTabUri(tabId) : undefined}
           value={sql}
           onChange={(val) => onChange(val || '')}
           onMount={handleEditorDidMount}
