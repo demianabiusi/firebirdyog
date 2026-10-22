@@ -1,6 +1,6 @@
 {
   "name": "firebirdyog",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Modern Firebird SQL Client built with Electron",
   "main": "dist-electron/main.js",
   "scripts": {
