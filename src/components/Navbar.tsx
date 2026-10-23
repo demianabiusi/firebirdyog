@@ -50,6 +50,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   // Single open menu state guarantees only one menu is active at a time
   const [openMenu, setOpenMenu] = useState<'tools' | 'database' | 'language' | 'theme' | null>(null);
 
+  const [appVersion, setAppVersion] = useState(() => 
+    typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.3'
+  );
+  const buildDate = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '';
+
+  useEffect(() => {
+    if (window.electronAPI?.getAppInfo) {
+      window.electronAPI.getAppInfo().then(info => {
+        if (info?.version) setAppVersion(info.version);
+      }).catch(() => {});
+    }
+  }, []);
+
   // Close menus on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -92,8 +105,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div>
             <h1 className="text-sm font-bold tracking-wide text-zinc-100 flex items-center gap-1.5">
               Firebird<span className="text-amber-400">Yog</span>
-              <span className="text-[10px] font-normal px-1.5 py-0.2 bg-zinc-800 text-zinc-400 rounded">
-                {t('navbar.brandSubtitle')}
+              <span 
+                className="text-[10px] font-mono px-1.5 py-0.5 bg-zinc-800/80 text-zinc-300 rounded border border-zinc-700/60 inline-flex items-center gap-1 select-none cursor-default"
+                title={`FirebirdYog v${appVersion}\nFecha de compilación: ${buildDate || 'N/A'}`}
+              >
+                <span>v{appVersion}</span>
+                {buildDate && (
+                  <span className="text-zinc-500 text-[9px] font-normal">• {buildDate}</span>
+                )}
               </span>
             </h1>
           </div>

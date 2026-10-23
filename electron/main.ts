@@ -203,7 +203,14 @@ app.on('window-all-closed', async () => {
   }
 });
 
-// IPC: App Settings
+// IPC: App Info & Settings
+ipcMain.handle('app:get-info', async () => {
+  return {
+    version: app.getVersion(),
+    name: app.getName(),
+  };
+});
+
 ipcMain.handle('app:get-settings', async () => {
   try {
     return storageService.getSettings();

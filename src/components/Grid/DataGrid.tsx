@@ -56,14 +56,15 @@ export const DataGrid: React.FC<DataGridProps> = ({ result, isRunning, schemaObj
   const [isCheckingUpdatability, setIsCheckingUpdatability] = useState(false);
 
   const editInputRef = useRef<HTMLInputElement | null>(null);
+  const editingCellKey = editingCell ? `${editingCell.origIdx}_${editingCell.col}` : null;
 
-  // Focus and select input on editing start
+  // Focus and select input once when editing starts for a cell (not on every keystroke)
   useEffect(() => {
-    if (editingCell && editInputRef.current) {
+    if (editingCellKey && editInputRef.current) {
       editInputRef.current.focus();
       editInputRef.current.select();
     }
-  }, [editingCell]);
+  }, [editingCellKey]);
 
   // Synchronize localRows and check updatability when result changes
   useEffect(() => {

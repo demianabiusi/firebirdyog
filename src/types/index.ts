@@ -142,6 +142,7 @@ export interface ElectronAPI {
   // App settings & persistence
   getAppSettings: () => Promise<AppSettings>;
   saveAppSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>;
+  getAppInfo: () => Promise<{ version: string; name: string }>;
   
   // Metadata
   getSchemaObjects: () => Promise<IpcResponse<{

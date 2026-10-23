@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   getAppSettings: () => ipcRenderer.invoke('app:get-settings'),
   saveAppSettings: (patch: any) => ipcRenderer.invoke('app:save-settings', patch),
+  getAppInfo: () => ipcRenderer.invoke('app:get-info'),
   
   getSchemaObjects: () => ipcRenderer.invoke('fb:get-schema-objects'),
   getTableDetails: (tableName: string) => ipcRenderer.invoke('fb:get-table-details', tableName),
