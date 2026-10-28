@@ -347,6 +347,11 @@ export class FirebirdService {
     return s.trim();
   }
 
+  private isPsqlHeader(header: string): boolean {
+    return /^(?:CREATE\s+(?:OR\s+ALTER\s+)?|RECREATE\s+|ALTER\s+)(?:PROCEDURE|TRIGGER|FUNCTION|PACKAGE(?:\s+BODY)?)\b/i.test(header) ||
+           /^EXECUTE\s+BLOCK\b/i.test(header);
+  }
+
   public splitSqlStatements(script: string): string[] {
     const statements: string[] = [];
     let currentDelimiter = ';';
@@ -355,7 +360,21 @@ export class FirebirdService {
     let inDoubleQuote = false;
     let inBlockComment = false;
     let inLineComment = false;
-    let beginDepth = 0;
+
+    // PSQL routine state tracking
+    let isPsqlRoutine = false;
+    let hasEncounteredAs = false;
+    let hasOpenedMainBegin = false;
+    let inSubRoutine = false;
+    let blockDepth = 0;
+
+    const resetStatementState = () => {
+      isPsqlRoutine = false;
+      hasEncounteredAs = false;
+      hasOpenedMainBegin = false;
+      inSubRoutine = false;
+      blockDepth = 0;
+    };
 
     let i = 0;
     const len = script.length;
@@ -367,10 +386,12 @@ export class FirebirdService {
       // Line comment: -- ...
       if (!inSingleQuote && !inDoubleQuote && !inBlockComment && char === '-' && nextChar === '-') {
         inLineComment = true;
+        currentStmt += '--';
         i += 2;
         continue;
       }
       if (inLineComment) {
+        currentStmt += char;
         if (char === '\n') {
           inLineComment = false;
         }
@@ -381,16 +402,19 @@ export class FirebirdService {
       // Block comment: /* ... */
       if (!inSingleQuote && !inDoubleQuote && !inLineComment && char === '/' && nextChar === '*') {
         inBlockComment = true;
+        currentStmt += '/*';
         i += 2;
         continue;
       }
       if (inBlockComment) {
         if (char === '*' && nextChar === '/') {
           inBlockComment = false;
+          currentStmt += '*/';
           i += 2;
-        } else {
-          i++;
+          continue;
         }
+        currentStmt += char;
+        i++;
         continue;
       }
 
@@ -409,45 +433,115 @@ export class FirebirdService {
 
       // Delimited identifiers: "..."
       if (char === '"' && !inSingleQuote) {
+        if (inDoubleQuote && nextChar === '"') {
+          currentStmt += '""';
+          i += 2;
+          continue;
+        }
         inDoubleQuote = !inDoubleQuote;
         currentStmt += char;
         i++;
         continue;
       }
 
+      // Code outside quotes and comments
       if (!inSingleQuote && !inDoubleQuote) {
-        // Detect SET TERM directive (e.g. SET TERM ^ ; or SET TERM ; ^)
         const remaining = script.slice(i);
-        const setTermMatch = remaining.match(/^SET\s+TERM\s+(\S+)(?:\s+(\S+)|\s*)/i);
-        if (setTermMatch && (i === 0 || /\s/.test(script[i - 1]))) {
-          const cleanedPrior = this.cleanSqlForExecution(currentStmt);
-          if (cleanedPrior) {
-            statements.push(cleanedPrior);
-          }
-          currentStmt = '';
-          currentDelimiter = setTermMatch[1];
-          const fullMatch = remaining.match(/^SET\s+TERM\s+[^\r\n;]+(?:[;\r\n]|\s*)/i);
-          i += fullMatch ? fullMatch[0].length : setTermMatch[0].length;
-          continue;
-        }
+        const prevChar = i > 0 ? script[i - 1] : '';
+        const isWordStart = i === 0 || !/[a-zA-Z0-9_$#:]/.test(prevChar);
 
-        // Track BEGIN / END nesting when delimiter is semicolon
-        if (currentDelimiter === ';') {
-          if (/^\bBEGIN\b/i.test(remaining)) {
-            beginDepth++;
-          } else if (/^\bEND\b/i.test(remaining)) {
-            if (beginDepth > 0) beginDepth--;
+        // Detect SET TERM directive (e.g. SET TERM ^ ; or SET TERM ; ^)
+        if (isWordStart && /^SET\s+TERM\b/i.test(remaining)) {
+          const fullMatch = remaining.match(/^SET\s+TERM\s+(\S+)(?:[^\r\n]*)/i);
+          if (fullMatch) {
+            const cleanedPrior = this.cleanSqlForExecution(currentStmt);
+            if (cleanedPrior) {
+              statements.push(cleanedPrior);
+            }
+            currentStmt = '';
+            resetStatementState();
+            currentDelimiter = fullMatch[1];
+            const lineMatch = remaining.match(/^SET\s+TERM[^\r\n]*(?:\r?\n|$)/i);
+            i += lineMatch ? lineMatch[0].length : fullMatch[0].length;
+            continue;
           }
         }
 
-        // Delimiter check
-        if (remaining.startsWith(currentDelimiter)) {
-          if (currentDelimiter !== ';' || beginDepth === 0) {
+        // If a PSQL routine block was previously closed (hasOpenedMainBegin && blockDepth === 0),
+        // and a new statement keyword begins without an intervening delimiter:
+        if (isPsqlRoutine && hasOpenedMainBegin && blockDepth === 0 && isWordStart) {
+          if (/^(?:CREATE|ALTER|RECREATE|DROP|EXECUTE|SELECT|INSERT|UPDATE|DELETE|MERGE|GRANT|REVOKE|COMMIT|ROLLBACK|SET)\b/i.test(remaining)) {
             const cleaned = this.cleanSqlForExecution(currentStmt);
             if (cleaned) {
               statements.push(cleaned);
             }
             currentStmt = '';
+            resetStatementState();
+          }
+        }
+
+        // Check keywords for PSQL routines and block tracking
+        if (isWordStart) {
+          // Detect sub-procedure or sub-function inside declarations (Firebird 3+)
+          if (isPsqlRoutine && hasEncounteredAs && !hasOpenedMainBegin && /^DECLARE\s+(?:FUNCTION|PROCEDURE)\b/i.test(remaining)) {
+            inSubRoutine = true;
+          }
+
+          if (/^AS\b/i.test(remaining)) {
+            const header = this.stripLeadingComments(currentStmt);
+            if (this.isPsqlHeader(header)) {
+              isPsqlRoutine = true;
+              hasEncounteredAs = true;
+            }
+          } else if (/^BEGIN\b/i.test(remaining)) {
+            if (!hasOpenedMainBegin && !inSubRoutine) {
+              const header = this.stripLeadingComments(currentStmt);
+              if (this.isPsqlHeader(header)) {
+                isPsqlRoutine = true;
+                hasEncounteredAs = true;
+                hasOpenedMainBegin = true;
+              }
+            }
+            blockDepth++;
+          } else if (/^CASE\b/i.test(remaining)) {
+            blockDepth++;
+          } else if (/^END\b/i.test(remaining)) {
+            if (blockDepth > 0) {
+              blockDepth--;
+              if (inSubRoutine && blockDepth === 0) {
+                inSubRoutine = false;
+              }
+            }
+          }
+        }
+
+        // Delimiter check
+        if (remaining.startsWith(currentDelimiter)) {
+          let shouldSplit = false;
+
+          if (currentDelimiter !== ';') {
+            shouldSplit = true;
+          } else {
+            if (!isPsqlRoutine) {
+              shouldSplit = blockDepth === 0;
+            } else {
+              if (!hasEncounteredAs) {
+                // Semicolon before AS in a DDL statement (e.g. ALTER TRIGGER TR INACTIVE; or EXTERNAL NAME;)
+                shouldSplit = true;
+              } else if (hasOpenedMainBegin && blockDepth === 0) {
+                // Semicolon at the end of the PSQL block (e.g. END;)
+                shouldSplit = true;
+              }
+            }
+          }
+
+          if (shouldSplit) {
+            const cleaned = this.cleanSqlForExecution(currentStmt);
+            if (cleaned) {
+              statements.push(cleaned);
+            }
+            currentStmt = '';
+            resetStatementState();
             i += currentDelimiter.length;
             continue;
           }

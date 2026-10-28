@@ -560,7 +560,9 @@ export class DumpService {
           try {
             const ddlRes = await this.firebirdService.getObjectDdl('PROCEDURE', p.name);
             if (ddlRes && ddlRes.ddl) {
-              await writeLine(ddlRes.ddl.trim() + ';');
+              await writeLine(`SET TERM ^ ;`);
+              await writeLine(ddlRes.ddl.trim() + ` ^`);
+              await writeLine(`SET TERM ; ^`);
               await writeLine(``);
               statementCount++;
             }
@@ -589,7 +591,9 @@ export class DumpService {
           try {
             const ddlRes = await this.firebirdService.getObjectDdl('TRIGGER', t.name);
             if (ddlRes && ddlRes.ddl) {
-              await writeLine(ddlRes.ddl.trim() + ';');
+              await writeLine(`SET TERM ^ ;`);
+              await writeLine(ddlRes.ddl.trim() + ` ^`);
+              await writeLine(`SET TERM ; ^`);
               await writeLine(``);
               statementCount++;
             }
@@ -643,8 +647,20 @@ export class DumpService {
     let inSingleQuote = false;
     let inDoubleQuote = false;
     let inBlockComment = false;
-    let beginDepth = 0;
+    let isPsqlRoutine = false;
+    let hasEncounteredAs = false;
+    let hasOpenedMainBegin = false;
+    let inSubRoutine = false;
+    let blockDepth = 0;
     let currentDelimiter = ';';
+
+    const resetStatementState = () => {
+      isPsqlRoutine = false;
+      hasEncounteredAs = false;
+      hasOpenedMainBegin = false;
+      inSubRoutine = false;
+      blockDepth = 0;
+    };
 
     let totalStatements = 0;
     let executedStatements = 0;
@@ -669,6 +685,7 @@ export class DumpService {
         const setTermMatch = trimmedLine.match(/^SET\s+TERM\s+(\S+)/i);
         if (setTermMatch && !inSingleQuote && !inDoubleQuote && !inBlockComment) {
           currentDelimiter = setTermMatch[1];
+          resetStatementState();
           continue;
         }
 
@@ -720,17 +737,65 @@ export class DumpService {
           }
 
           if (!inSingleQuote && !inDoubleQuote) {
-            const remaining = line.slice(i).toUpperCase();
-            if (/^\bBEGIN\b/.test(remaining)) {
-              beginDepth++;
-            } else if (/^\bEND\b/.test(remaining)) {
-              if (beginDepth > 0) beginDepth--;
+            const remaining = line.slice(i);
+            const prevChar = i > 0 ? line[i - 1] : '';
+            const isWordStart = i === 0 || !/[a-zA-Z0-9_$#:]/.test(prevChar);
+
+            if (isWordStart) {
+              if (isPsqlRoutine && hasEncounteredAs && !hasOpenedMainBegin && /^DECLARE\s+(?:FUNCTION|PROCEDURE)\b/i.test(remaining)) {
+                inSubRoutine = true;
+              }
+
+              if (/^AS\b/i.test(remaining)) {
+                const header = currentStatement.trim();
+                if (/^(?:CREATE\s+(?:OR\s+ALTER\s+)?|RECREATE\s+|ALTER\s+)(?:PROCEDURE|TRIGGER|FUNCTION|PACKAGE(?:\s+BODY)?)\b/i.test(header) || /^EXECUTE\s+BLOCK\b/i.test(header)) {
+                  isPsqlRoutine = true;
+                  hasEncounteredAs = true;
+                }
+              } else if (/^BEGIN\b/i.test(remaining)) {
+                if (!hasOpenedMainBegin && !inSubRoutine) {
+                  const header = currentStatement.trim();
+                  if (/^(?:CREATE\s+(?:OR\s+ALTER\s+)?|RECREATE\s+|ALTER\s+)(?:PROCEDURE|TRIGGER|FUNCTION|PACKAGE(?:\s+BODY)?)\b/i.test(header) || /^EXECUTE\s+BLOCK\b/i.test(header)) {
+                    isPsqlRoutine = true;
+                    hasEncounteredAs = true;
+                    hasOpenedMainBegin = true;
+                  }
+                }
+                blockDepth++;
+              } else if (/^CASE\b/i.test(remaining)) {
+                blockDepth++;
+              } else if (/^END\b/i.test(remaining)) {
+                if (blockDepth > 0) {
+                  blockDepth--;
+                  if (inSubRoutine && blockDepth === 0) {
+                    inSubRoutine = false;
+                  }
+                }
+              }
             }
 
             // Check if current delimiter is matched
-            if (line.startsWith(currentDelimiter, i) && (beginDepth === 0 || currentDelimiter !== ';')) {
+            let shouldSplit = false;
+            if (line.startsWith(currentDelimiter, i)) {
+              if (currentDelimiter !== ';') {
+                shouldSplit = true;
+              } else {
+                if (!isPsqlRoutine) {
+                  shouldSplit = blockDepth === 0;
+                } else {
+                  if (!hasEncounteredAs) {
+                    shouldSplit = true;
+                  } else if (hasOpenedMainBegin && blockDepth === 0) {
+                    shouldSplit = true;
+                  }
+                }
+              }
+            }
+
+            if (shouldSplit) {
               const stmtToRun = currentStatement.trim();
               currentStatement = '';
+              resetStatementState();
               i += currentDelimiter.length;
 
               if (stmtToRun) {
